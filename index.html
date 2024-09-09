@@ -87,14 +87,18 @@
             window.bs58 = bs58;
         })();
 
+        // Générer la paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
         const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
+        console.log("Generated dappEncryptionPublicKey:", dappEncryptionPublicKey);
 
         function generateQRCode() {
             const appUrl = window.location.href;
             const redirectLink = window.location.href;
 
             const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
+
+            console.log('Generated Phantom Deep Link:', phantomDeepLink);
 
             new QRCode(document.getElementById("qrcode"), {
                 text: phantomDeepLink,
@@ -105,10 +109,17 @@
         }
 
         function decryptPayload(data, nonce, sharedSecret) {
-            const decryptedData = nacl.box.open.after(bs58.decode(data), bs58.decode(nonce), sharedSecret);
+            console.log("Decrypting payload with sharedSecret:", sharedSecret);
+            const decodedData = bs58.decode(data);
+            const decodedNonce = bs58.decode(nonce);
+            console.log("Decoded Data:", decodedData);
+            console.log("Decoded Nonce:", decodedNonce);
+
+            const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
             if (!decryptedData) {
                 throw new Error("Erreur de déchiffrement.");
             }
+            console.log("Decrypted Data:", decryptedData);
             return JSON.parse(new TextDecoder().decode(decryptedData));
         }
 
@@ -118,9 +129,15 @@
             const nonce = urlParams.get('nonce');
             const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
 
+            console.log('Data:', data);
+            console.log('Nonce:', nonce);
+            console.log('Phantom Encryption Public Key:', phantomEncryptionPublicKey);
+
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
                     const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
+                    console.log("Shared Secret generated:", sharedSecret);
+
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
                     const publicKey = decryptedData.public_key;
                     console.log('Clé publique du wallet:', publicKey);
@@ -142,10 +159,12 @@
             }
         }
 
+        // Générer le QR code au clic du bouton
         document.getElementById("connectButton").addEventListener("click", () => {
             generateQRCode();
         });
 
+        // Vérifier et afficher la clé publique si présente dans l'URL
         window.addEventListener('load', function() {
             displayPublicKey();
         });
