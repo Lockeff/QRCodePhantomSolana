@@ -7,8 +7,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- Inclusion de TweetNaCl.js pour les fonctionnalités cryptographiques -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <!-- Inclusion correcte de bs58 pour l'encodage base58 -->
-    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/lib/index.min.js"></script>
+    <!-- Inclusion correcte de bs58 via un autre CDN -->
+    <script src="https://unpkg.com/bs58@5.0.0/dist/index.umd.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -26,7 +26,7 @@
     <script>
         // Générer une paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = bs58.default.encode(keyPair.publicKey);  // Encodage base58 pour Phantom
+        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);  // Encodage base58 pour Phantom
 
         // Fonction pour générer un lien de connexion Phantom et un QR code
         function generateQRCode() {
