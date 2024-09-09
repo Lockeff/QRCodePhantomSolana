@@ -6,6 +6,7 @@
     <title>Connect to Phantom Wallet via QR Code</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -18,7 +19,6 @@
     <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key: </h2>
     <p id="publicKey"></p>
 
-    <!-- JavaScript placé juste avant la fermeture de body -->
     <script>
         // Implémentation manuelle de bs58
         (function () {
@@ -88,6 +88,9 @@
             window.bs58 = bs58;
         })();
 
+        // Activer Buffer pour le navigateur
+        window.Buffer = window.buffer.Buffer;
+
         const keyPair = nacl.box.keyPair();
         const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
 
@@ -118,12 +121,6 @@
             const data = urlParams.get('data');
             const nonce = urlParams.get('nonce');
             const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
-
-            const redirectedUrl = window.location.href;  // Récupérer l'URL complète
-            console.log('Redirected URL:', redirectedUrl);  // Afficher dans la console
-            console.log('data:', data);
-            console.log('nonce:', nonce);
-            console.log('phantom_encryption_public_key:', phantomEncryptionPublicKey);
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
