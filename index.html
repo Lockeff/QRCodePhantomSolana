@@ -32,7 +32,7 @@
 
             // Générer un QR code à partir du lien Phantom
             new QRCode(document.getElementById("qrcode"), {
-                text: shortUrl,
+                text: phantomDeepLink,
                 width: 200,
                 height: 200,
                 correctLevel: QRCode.CorrectLevel.L  // Niveau de correction d'erreur bas pour permettre plus de données
