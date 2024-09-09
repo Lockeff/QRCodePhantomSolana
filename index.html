@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect to Phantom Wallet</title>
+    <script src="static/qrcode.min.js"></script>
+</head>
+<body>
+    <h1>Connect to Phantom Wallet via QR Code</h1>
+
+    <!-- Bouton pour générer le QR code -->
+    <button id="connectButton">Generate QR Code</button>
+
+    <!-- QR code container -->
+    <div id="qrcode" style="margin-top: 20px;"></div>
+
+    <!-- Message pour afficher la clé publique après connexion -->
+    <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key: </h2>
+    <p id="publicKey"></p>
+
+    <script>
+        // Fonction pour vérifier si Phantom est installé
+        function isPhantomInstalled() {
+            return window.solana && window.solana.isPhantom;
+        }
+
+        // Fonction pour récupérer la clé publique du wallet après la connexion
+        async function connectPhantom() {
+            try {
+                const response = await window.solana.connect();
+                const publicKey = response.publicKey.toString();
+
+                // Afficher la clé publique dans l'élément HTML
+                document.getElementById("publicKeyMessage").style.display = "block";
+                document.getElementById("publicKey").innerText = publicKey;
+            } catch (error) {
+                console.error("Connexion échouée : ", error);
+                alert("Échec de la connexion à Phantom Wallet.");
+            }
+        }
+
+        // Fonction pour générer un lien de connexion Phantom et un QR code
+        function generateQRCode() {
+            const phantomDeepLink = "https://phantom.app/ul/v1/connect?app_url=" + encodeURIComponent(window.location.href);
+
+            // Générer un QR code à partir du lien Phantom
+            new QRCode(document.getElementById("qrcode"), {
+                text: phantomDeepLink,
+                width: 200,
+                height: 200
+            });
+        }
+
+        // Écouter le clic du bouton pour générer un QR code
+        document.getElementById("connectButton").addEventListener("click", () => {
+            // Vérifie si Phantom est installé
+            if (isPhantomInstalled()) {
+                // Si Phantom est installé sur le bureau, connecter directement
+                connectPhantom();
+            } else {
+                // Si Phantom n'est pas installé, générer le QR code pour une connexion mobile
+                generateQRCode();
+            }
+        });
+
+        // Vérifier si Phantom est installé dès le chargement de la page
+        if (isPhantomInstalled()) {
+            console.log("Phantom Wallet est installé.");
+        } else {
+            console.log("Phantom Wallet n'est pas installé.");
+        }
+    </script>
+</body>
+</html>
