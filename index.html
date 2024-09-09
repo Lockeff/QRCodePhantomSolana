@@ -20,8 +20,11 @@
     <p id="publicKey"></p>
 
     <script>
-        // Clé publique de chiffrement pour sécuriser la connexion (tu peux en générer une avec NaCl ou d'autres outils)
-        const dappEncryptionPublicKey = "9defe70d87d53c939ae633d66403e4c47076acce9cdf93ad4a7f89330e2c1469";  // Remplacer par ta propre clé
+        // Importation de NaCl (si nécessaire, via une librairie)
+        const nacl = window.nacl;
+
+        // Clé publique de chiffrement pour sécuriser la connexion (générée avec NaCl)
+        const dappEncryptionPublicKey = "TON_PUBLIC_KEY";  // Remplace par ta propre clé
 
         // Fonction pour générer un lien de connexion Phantom et un QR code
         function generateQRCode() {
