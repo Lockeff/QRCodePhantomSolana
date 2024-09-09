@@ -6,7 +6,6 @@
     <title>Connect to Phantom Wallet via QR Code</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -20,9 +19,6 @@
     <p id="publicKey"></p>
 
     <script>
-        // Activation de Buffer pour le navigateur
-        window.Buffer = window.Buffer || window.buffer.Buffer;
-
         // Implémentation manuelle de bs58
         (function () {
             const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -58,7 +54,7 @@
                 },
 
                 decode(string) {
-                    if (string.length === 0) return Buffer.alloc(0);
+                    if (string.length === 0) return new Uint8Array(0);
 
                     let bytes = [0];
                     for (let i = 0; i < string.length; i++) {
@@ -77,10 +73,10 @@
                         }
                     }
 
-                    let result = Buffer.from(bytes.reverse());
+                    let result = new Uint8Array(bytes.reverse());
 
                     for (let k = 0; string[k] === alphabet[0] && k < string.length - 1; ++k) {
-                        result = Buffer.concat([Buffer.alloc(1), result]);
+                        result = new Uint8Array([0, ...result]);
                     }
 
                     return result;
@@ -113,7 +109,7 @@
             if (!decryptedData) {
                 throw new Error("Erreur de déchiffrement.");
             }
-            return JSON.parse(Buffer.from(decryptedData).toString('utf8'));
+            return JSON.parse(new TextDecoder().decode(decryptedData));
         }
 
         function getPublicKeyFromUrl() {
