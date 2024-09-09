@@ -5,21 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect to Phantom Wallet via QR Code</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- TweetNaCl.js for cryptography -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
 
     <!-- QR code container -->
+    <button id="connectButton">Generate QR Code</button>
     <div id="qrcode" style="margin-top: 20px;"></div>
 
     <!-- Message pour afficher la clé publique après déchiffrement -->
     <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key: </h2>
     <p id="publicKey"></p>
 
+    <!-- JavaScript placé juste avant la fermeture de body -->
     <script>
-        // Implémentation manuelle de bs58 (déjà présente)
+        // Implémentation manuelle de bs58
         (function () {
             const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
             const base = alphabet.length;
@@ -87,11 +88,23 @@
             window.bs58 = bs58;
         })();
 
-        // Générer une paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);  // Encode la clé publique en base58
+        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
 
-        // Fonction pour déchiffrer les données après redirection
+        function generateQRCode() {
+            const appUrl = window.location.href;
+            const redirectLink = window.location.href;
+
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
+
+            new QRCode(document.getElementById("qrcode"), {
+                text: phantomDeepLink,
+                width: 200,
+                height: 200,
+                correctLevel: QRCode.CorrectLevel.L
+            });
+        }
+
         function decryptPayload(data, nonce, sharedSecret) {
             const decryptedData = nacl.box.open.after(bs58.decode(data), bs58.decode(nonce), sharedSecret);
             if (!decryptedData) {
@@ -100,7 +113,6 @@
             return JSON.parse(Buffer.from(decryptedData).toString('utf8'));
         }
 
-        // Récupérer la clé publique depuis l'URL après la redirection
         function getPublicKeyFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             const data = urlParams.get('data');
@@ -109,13 +121,8 @@
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    // Créer un secret partagé avec la clé publique Phantom
                     const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
-
-                    // Déchiffrer les données envoyées par Phantom
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
-
-                    // Récupérer la clé publique du wallet
                     const publicKey = decryptedData.public_key;
                     console.log('Clé publique du wallet:', publicKey);
                     return publicKey;
@@ -125,11 +132,9 @@
             } else {
                 console.error('Paramètres manquants dans l\'URL');
             }
-
             return null;
         }
 
-        // Afficher la clé publique si elle est présente dans l'URL après redirection
         function displayPublicKey() {
             const publicKey = getPublicKeyFromUrl();
             if (publicKey) {
@@ -138,12 +143,10 @@
             }
         }
 
-        // Écouter le clic du bouton pour générer un QR code
         document.getElementById("connectButton").addEventListener("click", () => {
-            generateQRCode();  // Générer le QR code avec les bons paramètres
+            generateQRCode();
         });
 
-        // Vérifier si la clé publique est présente dans l'URL au chargement de la page
         window.addEventListener('load', function() {
             displayPublicKey();
         });
