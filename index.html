@@ -110,34 +110,39 @@
 
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
-            
+
             // Décodage des données et du nonce en Uint8Array
-            const decodedData = bs58.decode(data);
-            const decodedNonce = bs58.decode(nonce);
+            try {
+                const decodedData = bs58.decode(data);
+                const decodedNonce = bs58.decode(nonce);
             
-            console.log("Decoded Data:", decodedData);
-            console.log("Decoded Data Length:", decodedData.length);  // Ajout de la taille des données
-            console.log("Decoded Nonce:", decodedNonce);
-            console.log("Decoded Nonce Length:", decodedNonce.length);  // Ajout de la taille du nonce
+                console.log("Decoded Data:", decodedData);
+                console.log("Decoded Data Length:", decodedData.length);
+                console.log("Decoded Nonce:", decodedNonce);
+                console.log("Decoded Nonce Length:", decodedNonce.length);
 
-            // Vérification si le nonce a bien 24 octets
-            if (decodedNonce.length !== 24) {
-                console.error("Invalid nonce length:", decodedNonce.length);
-                throw new Error("Nonce must be 24 bytes.");
+                // Vérification de la taille du nonce
+                if (decodedNonce.length !== 24) {
+                    throw new Error("Nonce must be 24 bytes.");
+                }
+
+                // Tentative de déchiffrement avec NaCl
+                const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
+                
+                if (!decryptedData) {
+                    throw new Error("Erreur de déchiffrement.");
+                }
+
+                console.log("Decrypted Data:", decryptedData);
+
+                return JSON.parse(new TextDecoder().decode(decryptedData));
+
+            } catch (error) {
+                console.error("Erreur lors du déchiffrement:", error);
+                throw error;
             }
-
-            // Tentative de déchiffrement avec NaCl
-            const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
-            
-            if (!decryptedData) {
-                throw new Error("Erreur de déchiffrement.");
-            }
-
-            console.log("Decrypted Data:", decryptedData);
-            
-            // Conversion des données déchiffrées en texte lisible
-            return JSON.parse(new TextDecoder().decode(decryptedData));
         }
+
 
 
         function getPublicKeyFromUrl() {
