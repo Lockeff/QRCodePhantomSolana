@@ -20,6 +20,9 @@
     <p id="publicKey"></p>
 
     <script>
+        // Activation de Buffer pour le navigateur
+        window.Buffer = window.Buffer || window.buffer.Buffer;
+
         // Implémentation manuelle de bs58
         (function () {
             const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -87,9 +90,6 @@
             // Exposer bs58 pour l'utiliser
             window.bs58 = bs58;
         })();
-
-        // Activer Buffer pour le navigateur
-        window.Buffer = window.buffer.Buffer;
 
         const keyPair = nacl.box.keyPair();
         const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
