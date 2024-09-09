@@ -20,15 +20,16 @@
     <p id="publicKey"></p>
 
     <script>
-        // Clé publique de chiffrement pour sécuriser la connexion (tu peux en générer une)
+        // Clé publique de chiffrement pour sécuriser la connexion (tu peux en générer une avec NaCl ou d'autres outils)
         const dappEncryptionPublicKey = "9defe70d87d53c939ae633d66403e4c47076acce9cdf93ad4a7f89330e2c1469";  // Remplacer par ta propre clé
 
         // Fonction pour générer un lien de connexion Phantom et un QR code
         function generateQRCode() {
             const appUrl = window.location.href;  // URL de redirection après la connexion Phantom
+            const redirectLink = window.location.href;  // Lien de redirection après la connexion
 
             // URL de connexion Phantom avec deep link, la clé publique de chiffrement et le cluster
-            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet`;
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
 
             // Générer un QR code à partir du lien Phantom
             new QRCode(document.getElementById("qrcode"), {
@@ -52,6 +53,8 @@
             if (publicKey) {
                 document.getElementById('publicKeyMessage').style.display = 'block';
                 document.getElementById('publicKey').innerText = publicKey;
+            } else {
+                console.error("Clé publique introuvable dans l'URL.");
             }
         }
 
