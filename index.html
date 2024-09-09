@@ -17,9 +17,9 @@
     <!-- QR code container -->
     <div id="qrcode" style="margin-top: 20px;"></div>
 
-    <!-- Message pour afficher la clé publique après connexion -->
-    <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key: </h2>
-    <p id="publicKey"></p>
+    <!-- Message pour afficher l'URL après redirection -->
+    <h2 id="urlMessage" style="display: none;">Redirected URL: </h2>
+    <p id="urlDisplay"></p>
 
     <script>
         // Implémentation manuelle de bs58
@@ -100,7 +100,7 @@
             const redirectLink = window.location.href;  // Lien de redirection après la connexion
 
             // URL de connexion Phantom avec deep link sécurisé et la clé publique
-            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=mainnet-beta&redirect_link=${encodeURIComponent(redirectLink)}`;
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
 
             // Générer un QR code à partir du lien Phantom
             new QRCode(document.getElementById("qrcode"), {
@@ -111,73 +111,12 @@
             });
         }
 
-        // Sauvegarder la clé publique dans le localStorage
-        function savePublicKeyLocally(publicKey) {
-            localStorage.setItem('phantomPublicKey', publicKey);
-        }
-
-        // Fonction pour récupérer et afficher la clé publique depuis le localStorage
-        function displayPublicKey(publicKey) {
-            document.getElementById('publicKeyMessage').style.display = 'block';
-            document.getElementById('publicKey').innerText = publicKey;
-        }
-
-        // Vérifier si une clé publique est déjà présente dans le localStorage au chargement de la page
-        window.addEventListener('load', function() {
-            const publicKey = localStorage.getItem('phantomPublicKey');
-            if (publicKey) {
-                displayPublicKey(publicKey);
-            }
-        });
-
-        // Écouter les changements dans le localStorage pour mettre à jour l'affichage
-        window.addEventListener('storage', function(event) {
-            if (event.key === 'phantomPublicKey') {
-                displayPublicKey(event.newValue);
-            }
-        });
-
-        // Fonction pour récupérer et déchiffrer les données après redirection
-        function decryptPayload(data, nonce, sharedSecret) {
-            const decryptedData = nacl.box.open.after(bs58.decode(data), bs58.decode(nonce), sharedSecret);
-            if (!decryptedData) {
-                throw new Error("Erreur de déchiffrement.");
-            }
-            return JSON.parse(Buffer.from(decryptedData).toString('utf8'));
-        }
-
-        // Fonction pour récupérer la clé publique après la redirection
-        function getPublicKeyFromUrl() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const data = urlParams.get('data');
-            const nonce = urlParams.get('nonce');
-            const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
-
-            if (data && nonce && phantomEncryptionPublicKey) {
-                // Créer un secret partagé avec la clé publique Phantom
-                const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
-
-                // Déchiffrer les données envoyées par Phantom
-                const decryptedData = decryptPayload(data, nonce, sharedSecret);
-
-                // Récupérer la clé publique du wallet
-                const publicKey = decryptedData.public_key;
-
-                // Sauvegarder la clé publique dans le localStorage
-                savePublicKeyLocally(publicKey);
-
-                return publicKey;
-            }
-
-            return null;
-        }
-
-        // Afficher la clé publique si elle est présente dans l'URL après la redirection
-        function displayPublicKeyFromUrl() {
-            const publicKey = getPublicKeyFromUrl();
-            if (publicKey) {
-                displayPublicKey(publicKey);
-            }
+        // Fonction pour afficher l'URL après la redirection
+        function displayUrl() {
+            const redirectedUrl = window.location.href;  // Récupérer l'URL complète
+            console.log('Redirected URL:', redirectedUrl);  // Afficher dans la console
+            document.getElementById('urlMessage').style.display = 'block';  // Afficher le message
+            document.getElementById('urlDisplay').innerText = redirectedUrl;  // Afficher l'URL sur la page
         }
 
         // Écouter le clic du bouton pour générer un QR code
@@ -185,8 +124,10 @@
             generateQRCode();  // Générer le QR code avec les bons paramètres
         });
 
-        // Vérifier si la clé publique est présente dans l'URL au chargement de la page
-        displayPublicKeyFromUrl();
+        // Afficher l'URL après la redirection lors du chargement de la page
+        window.addEventListener('load', function() {
+            displayUrl();  // Afficher l'URL actuelle après la redirection
+        });
     </script>
 </body>
 </html>
