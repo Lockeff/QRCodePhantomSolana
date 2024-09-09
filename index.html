@@ -111,6 +111,32 @@
             });
         }
 
+        // Sauvegarder la clé publique dans le localStorage
+        function savePublicKeyLocally(publicKey) {
+            localStorage.setItem('phantomPublicKey', publicKey);
+        }
+
+        // Fonction pour récupérer et afficher la clé publique depuis le localStorage
+        function displayPublicKey(publicKey) {
+            document.getElementById('publicKeyMessage').style.display = 'block';
+            document.getElementById('publicKey').innerText = publicKey;
+        }
+
+        // Vérifier si une clé publique est déjà présente dans le localStorage au chargement de la page
+        window.addEventListener('load', function() {
+            const publicKey = localStorage.getItem('phantomPublicKey');
+            if (publicKey) {
+                displayPublicKey(publicKey);
+            }
+        });
+
+        // Écouter les changements dans le localStorage pour mettre à jour l'affichage
+        window.addEventListener('storage', function(event) {
+            if (event.key === 'phantomPublicKey') {
+                displayPublicKey(event.newValue);
+            }
+        });
+
         // Fonction pour récupérer et déchiffrer les données après redirection
         function decryptPayload(data, nonce, sharedSecret) {
             const decryptedData = nacl.box.open.after(bs58.decode(data), bs58.decode(nonce), sharedSecret);
@@ -136,6 +162,10 @@
 
                 // Récupérer la clé publique du wallet
                 const publicKey = decryptedData.public_key;
+
+                // Sauvegarder la clé publique dans le localStorage
+                savePublicKeyLocally(publicKey);
+
                 return publicKey;
             }
 
@@ -143,13 +173,10 @@
         }
 
         // Afficher la clé publique si elle est présente dans l'URL après la redirection
-        function displayPublicKey() {
+        function displayPublicKeyFromUrl() {
             const publicKey = getPublicKeyFromUrl();
             if (publicKey) {
-                document.getElementById('publicKeyMessage').style.display = 'block';
-                document.getElementById('publicKey').innerText = publicKey;
-            } else {
-                console.error("Impossible de récupérer la clé publique.");
+                displayPublicKey(publicKey);
             }
         }
 
@@ -159,7 +186,7 @@
         });
 
         // Vérifier si la clé publique est présente dans l'URL au chargement de la page
-        displayPublicKey();
+        displayPublicKeyFromUrl();
     </script>
 </body>
 </html>
