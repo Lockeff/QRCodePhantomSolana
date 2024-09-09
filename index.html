@@ -100,7 +100,7 @@
             const redirectLink = window.location.href;  // Lien de redirection après la connexion
 
             // URL de connexion Phantom avec deep link sécurisé et la clé publique
-            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=mainnet-beta&redirect_link=${encodeURIComponent(redirectLink)}`;
 
             // Générer un QR code à partir du lien Phantom
             new QRCode(document.getElementById("qrcode"), {
