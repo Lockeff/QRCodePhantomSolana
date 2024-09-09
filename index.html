@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect to Phantom Wallet via QR Code</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- Inclusion de TweetNaCl.js pour les fonctionnalités cryptographiques -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <!-- Inclusion correcte de bs58 via un autre CDN -->
-    <script src="https://unpkg.com/bs58@5.0.0/dist/index.umd.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -24,43 +20,47 @@
     <p id="publicKey"></p>
 
     <script>
-        // Générer une paire de clés publique/privée pour le chiffrement
-        const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);  // Encodage base58 pour Phantom
+        // Fonction pour détecter Phantom Wallet dans le navigateur
+        function getProvider() {
+            if ("solana" in window) {
+                const provider = window.solana;
+                if (provider.isPhantom) {
+                    return provider;
+                }
+            }
+            window.open("https://phantom.app/", "_blank");
+        }
 
         // Fonction pour générer un lien de connexion Phantom et un QR code
         function generateQRCode() {
-            const appUrl = window.location.href;  // URL de redirection après la connexion Phantom
-            const redirectLink = window.location.href;  // Lien de redirection après la connexion
+            const provider = getProvider();
+            
+            if (!provider) {
+                alert("Phantom Wallet non détecté.");
+                return;
+            }
+            
+            // Appel à Phantom Wallet pour se connecter
+            provider.connect()
+                .then((resp) => {
+                    const publicKey = resp.publicKey.toString();  // Récupération de la clé publique
+                    document.getElementById('publicKeyMessage').style.display = 'block';
+                    document.getElementById('publicKey').innerText = publicKey;  // Affichage de la clé publique
+                })
+                .catch((err) => {
+                    console.error("Échec de la connexion:", err);
+                });
 
-            // URL de connexion Phantom avec deep link, la clé publique de chiffrement et le cluster
-            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
+            // Générer un QR code avec une URL de connexion si nécessaire pour mobile
+            const appUrl = window.location.href;  
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&cluster=devnet`;
 
-            // Générer un QR code à partir du lien Phantom
+            // Générer le QR code
             new QRCode(document.getElementById("qrcode"), {
                 text: phantomDeepLink,
                 width: 200,
-                height: 200,
-                correctLevel: QRCode.CorrectLevel.L  // Niveau de correction d'erreur bas pour permettre plus de données
+                height: 200
             });
-        }
-
-        // Fonction pour récupérer la clé publique depuis l'URL (après redirection)
-        function getPublicKeyFromUrl() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const publicKey = urlParams.get('public_key');
-            return publicKey;
-        }
-
-        // Afficher la clé publique si elle est présente dans l'URL
-        function displayPublicKey() {
-            const publicKey = getPublicKeyFromUrl();
-            if (publicKey) {
-                document.getElementById('publicKeyMessage').style.display = 'block';
-                document.getElementById('publicKey').innerText = publicKey;
-            } else {
-                console.error("Clé publique introuvable dans l'URL.");
-            }
         }
 
         // Écouter le clic du bouton pour générer un QR code
@@ -68,8 +68,6 @@
             generateQRCode();  // Générer le QR code avec les bons paramètres
         });
 
-        // Vérifier si la clé publique est présente dans l'URL au chargement de la page
-        displayPublicKey();
     </script>
 </body>
 </html>
