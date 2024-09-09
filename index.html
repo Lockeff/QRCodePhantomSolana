@@ -110,41 +110,18 @@
 
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
+            const decodedData = bs58.decode(data);
+            const decodedNonce = bs58.decode(nonce);
+            console.log("Decoded Data:", decodedData);
+            console.log("Decoded Nonce:", decodedNonce);
 
-            try {
-                // Décodage des données et du nonce en Uint8Array
-                const decodedData = bs58.decode(data);
-                const decodedNonce = bs58.decode(nonce);
-
-                console.log("Decoded Data:", decodedData);
-                console.log("Decoded Data Length:", decodedData.length);
-                console.log("Decoded Nonce:", decodedNonce);
-                console.log("Decoded Nonce Length:", decodedNonce.length);
-
-                // Vérification de la taille du nonce
-                if (decodedNonce.length !== 24) {
-                    throw new Error("Nonce must be 24 bytes.");
-                }
-
-                // Tentative de déchiffrement avec NaCl
-                const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
-                
-                if (!decryptedData) {
-                    throw new Error("Erreur de déchiffrement.");
-                }
-
-                console.log("Decrypted Data:", new TextDecoder().decode(decryptedData));
-
-                return JSON.parse(new TextDecoder().decode(decryptedData));
-
-            } catch (error) {
-                console.error("Erreur lors du déchiffrement:", error);
-                throw error;
+            const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
+            if (!decryptedData) {
+                throw new Error("Erreur de déchiffrement.");
             }
+            console.log("Decrypted Data:", decryptedData);
+            return JSON.parse(new TextDecoder().decode(decryptedData));
         }
-
-
-
 
         function getPublicKeyFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -155,6 +132,7 @@
             console.log('Data:', data);
             console.log('Nonce:', nonce);
             console.log('Phantom Encryption Public Key:', phantomEncryptionPublicKey);
+            console.log('Secret Key of Dapp:', keyPair.secretKey);
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
