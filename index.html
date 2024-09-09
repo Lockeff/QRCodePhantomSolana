@@ -111,11 +111,11 @@
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
 
-            // Décodage des données et du nonce en Uint8Array
             try {
+                // Décodage des données et du nonce en Uint8Array
                 const decodedData = bs58.decode(data);
                 const decodedNonce = bs58.decode(nonce);
-            
+
                 console.log("Decoded Data:", decodedData);
                 console.log("Decoded Data Length:", decodedData.length);
                 console.log("Decoded Nonce:", decodedNonce);
@@ -133,7 +133,7 @@
                     throw new Error("Erreur de déchiffrement.");
                 }
 
-                console.log("Decrypted Data:", decryptedData);
+                console.log("Decrypted Data:", new TextDecoder().decode(decryptedData));
 
                 return JSON.parse(new TextDecoder().decode(decryptedData));
 
@@ -142,6 +142,7 @@
                 throw error;
             }
         }
+
 
 
 
