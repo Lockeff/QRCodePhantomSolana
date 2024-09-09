@@ -115,6 +115,11 @@
             console.log("Decoded Data:", decodedData);
             console.log("Decoded Nonce:", decodedNonce);
 
+            if (decodedNonce.length !== 24) {
+                console.error("Invalid nonce length:", decodedNonce.length);
+                throw new Error("Nonce must be 24 bytes.");
+            }
+
             const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
             if (!decryptedData) {
                 throw new Error("Erreur de déchiffrement.");
@@ -132,7 +137,6 @@
             console.log('Data:', data);
             console.log('Nonce:', nonce);
             console.log('Phantom Encryption Public Key:', phantomEncryptionPublicKey);
-            console.log('Secret Key of Dapp:', keyPair.secretKey);
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
