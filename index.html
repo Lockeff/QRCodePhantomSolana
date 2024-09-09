@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect to Phantom Wallet via QR Code</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- TweetNaCl.js for cryptography -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -20,57 +22,144 @@
     <p id="publicKey"></p>
 
     <script>
-        // Vérification si Phantom Wallet est disponible
-        function getProvider() {
-            if ("solana" in window) {
-                const provider = window.solana;
-                if (provider.isPhantom) {
-                    return provider;
+        // Implémentation de bs58
+        (function () {
+            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const base = alphabet.length;
+
+            const bs58 = {
+                encode(buffer) {
+                    if (buffer.length === 0) return '';
+
+                    let digits = [0];
+                    for (let i = 0; i < buffer.length; ++i) {
+                        let carry = buffer[i];
+                        for (let j = 0; j < digits.length; ++j) {
+                            carry += digits[j] << 8;
+                            digits[j] = carry % base;
+                            carry = (carry / base) | 0;
+                        }
+                        while (carry > 0) {
+                            digits.push(carry % base);
+                            carry = (carry / base) | 0;
+                        }
+                    }
+
+                    let result = '';
+                    for (let k = 0; buffer[k] === 0 && k < buffer.length - 1; ++k) {
+                        result += alphabet[0];
+                    }
+                    for (let q = digits.length - 1; q >= 0; --q) {
+                        result += alphabet[digits[q]];
+                    }
+
+                    return result;
+                },
+
+                decode(string) {
+                    if (string.length === 0) return Buffer.alloc(0);
+
+                    let bytes = [0];
+                    for (let i = 0; i < string.length; i++) {
+                        const value = alphabet.indexOf(string[i]);
+                        if (value === -1) throw new Error('Invalid character');
+
+                        let carry = value;
+                        for (let j = 0; j < bytes.length; ++j) {
+                            carry += bytes[j] * base;
+                            bytes[j] = carry & 0xff;
+                            carry >>= 8;
+                        }
+                        while (carry > 0) {
+                            bytes.push(carry & 0xff);
+                            carry >>= 8;
+                        }
+                    }
+
+                    let result = Buffer.from(bytes.reverse());
+
+                    for (let k = 0; string[k] === alphabet[0] && k < string.length - 1; ++k) {
+                        result = Buffer.concat([Buffer.alloc(1), result]);
+                    }
+
+                    return result;
                 }
-            }
-            window.open("https://phantom.app/", "_blank");  // Redirection pour installer Phantom si non présent
-        }
+            };
 
-        // Fonction pour connecter le wallet Phantom
-        async function connectToPhantom() {
-            const provider = getProvider();
+            // Exposer bs58 pour l'utiliser
+            window.bs58 = bs58;
+        })();
 
-            if (provider) {
-                try {
-                    const resp = await provider.connect();  // Connexion à Phantom Wallet
-                    const publicKey = resp.publicKey.toString();  // Récupération de la clé publique
+        // Générer une paire de clés publique/privée pour le chiffrement
+        const keyPair = nacl.box.keyPair();
+        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);  // Encode la clé publique en base58
 
-                    // Afficher la clé publique
-                    document.getElementById('publicKeyMessage').style.display = 'block';
-                    document.getElementById('publicKey').innerText = publicKey;
-                    console.log("Public Key:", publicKey);
-                } catch (err) {
-                    console.error("Erreur de connexion:", err);
-                }
-            } else {
-                alert("Phantom Wallet non installé !");
-            }
-        }
-
-        // Fonction pour générer un QR code (utile pour mobile ou autre)
+        // Fonction pour générer un lien de connexion Phantom et un QR code
         function generateQRCode() {
-            const appUrl = window.location.href;
-            const redirectLink = appUrl;  // Lien pour redirection après la connexion Phantom
-            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&redirect_link=${encodeURIComponent(redirectLink)}&cluster=devnet`;
+            const appUrl = window.location.href;  // URL de redirection après la connexion Phantom
+            const redirectLink = window.location.href;  // Lien de redirection après la connexion
 
-            // Générer un QR code
+            // URL de connexion Phantom avec deep link sécurisé et la clé publique
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
+
+            // Générer un QR code à partir du lien Phantom
             new QRCode(document.getElementById("qrcode"), {
                 text: phantomDeepLink,
                 width: 200,
-                height: 200
+                height: 200,
+                correctLevel: QRCode.CorrectLevel.L
             });
         }
 
-        // Clic sur le bouton pour connecter à Phantom et générer le QR code
+        // Fonction pour récupérer et déchiffrer les données après redirection
+        function decryptPayload(data, nonce, sharedSecret) {
+            const decryptedData = nacl.box.open.after(bs58.decode(data), bs58.decode(nonce), sharedSecret);
+            if (!decryptedData) {
+                throw new Error("Erreur de déchiffrement.");
+            }
+            return JSON.parse(Buffer.from(decryptedData).toString('utf8'));
+        }
+
+        // Fonction pour récupérer la clé publique après la redirection
+        function getPublicKeyFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const data = urlParams.get('data');
+            const nonce = urlParams.get('nonce');
+            const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
+
+            if (data && nonce && phantomEncryptionPublicKey) {
+                // Créer un secret partagé avec la clé publique Phantom
+                const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
+
+                // Déchiffrer les données envoyées par Phantom
+                const decryptedData = decryptPayload(data, nonce, sharedSecret);
+
+                // Récupérer la clé publique du wallet
+                const publicKey = decryptedData.public_key;
+                return publicKey;
+            }
+
+            return null;
+        }
+
+        // Afficher la clé publique si elle est présente dans l'URL après la redirection
+        function displayPublicKey() {
+            const publicKey = getPublicKeyFromUrl();
+            if (publicKey) {
+                document.getElementById('publicKeyMessage').style.display = 'block';
+                document.getElementById('publicKey').innerText = publicKey;
+            } else {
+                console.error("Impossible de récupérer la clé publique.");
+            }
+        }
+
+        // Écouter le clic du bouton pour générer un QR code
         document.getElementById("connectButton").addEventListener("click", () => {
-            connectToPhantom();  // Connexion via Phantom Wallet
-            generateQRCode();  // Générer le QR code pour les mobiles
+            generateQRCode();  // Générer le QR code avec les bons paramètres
         });
+
+        // Vérifier si la clé publique est présente dans l'URL au chargement de la page
+        displayPublicKey();
     </script>
 </body>
 </html>
