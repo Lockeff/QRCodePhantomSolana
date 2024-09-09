@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect to Phantom Wallet</title>
+    <script>
+        // Fonction pour générer le QR code en cliquant sur le bouton
+        function generateQRCode() {
+            fetch('/generate_qr')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.message === 'QR code generated') {
+                        // Afficher le QR code dans l'image
+                        document.getElementById('qrImage').src = '/get_qr_code';
+                        document.getElementById('qrImage').style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('There was a problem with the fetch operation:', error);
+                });
+        }
+    </script>
+</head>
+<body>
+    <h1>Connect to Phantom Wallet</h1>
+
+    <!-- Bouton pour générer le QR code -->
+    <button onclick="generateQRCode()">Generate QR Code</button>
+
+    <!-- Image où le QR code sera affiché -->
+    <div>
+        <img id="qrImage" src="" alt="QR Code" style="display:none; margin-top: 20px;">
+    </div>
+
+    <!-- Affichage de la clé publique si elle est disponible -->
+    {% if public_key %}
+        <h2>Your Solana Wallet Public Key:</h2>
+        <p>{{ public_key }}</p>
+    {% endif %}
+</body>
+</html>
