@@ -12,11 +12,43 @@
     <button id="connectButton">Generate QR Code</button>
     <div id="qrcode" style="margin-top: 20px;"></div>
 
-    <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key:</h2>
+    <h2 id="publicKeyMessage" style="display: none;">Votre clé publique Solana :</h2>
     <p id="publicKey"></p>
 
+    <!-- Conteneur pour les logs -->
+    <h2>Logs :</h2>
+    <pre id="logs" style="white-space: pre-wrap; background-color: #f0f0f0; padding: 10px;"></pre>
+
     <script>
-        // Importation des modules nécessaires
+        // Fonction pour capturer les logs et les afficher sur la page
+        (function() {
+            const oldLog = console.log;
+            const oldError = console.error;
+            const logContainer = document.getElementById('logs');
+
+            console.log = function(...args) {
+                oldLog.apply(console, args);
+                args.forEach(arg => {
+                    if (typeof arg === 'object') {
+                        logContainer.innerText += JSON.stringify(arg, null, 2) + '\n';
+                    } else {
+                        logContainer.innerText += arg + '\n';
+                    }
+                });
+            };
+
+            console.error = function(...args) {
+                oldError.apply(console, args);
+                args.forEach(arg => {
+                    if (typeof arg === 'object') {
+                        logContainer.innerText += 'Erreur: ' + JSON.stringify(arg, null, 2) + '\n';
+                    } else {
+                        logContainer.innerText += 'Erreur: ' + arg + '\n';
+                    }
+                });
+            };
+        })();
+
         const nacl = window.nacl;
 
         // Implémentation des fonctions encodeBase58 et decodeBase58
@@ -66,10 +98,22 @@
             };
         })();
 
-        // Générer la paire de clés publique/privée pour le chiffrement
-        const keyPair = nacl.box.keyPair();
+        // Générer ou récupérer la paire de clés publique/privée pour le chiffrement
+        let keyPair;
+        if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
+            keyPair = {
+                publicKey: decodeBase58(sessionStorage.getItem('keyPairPublicKey')),
+                secretKey: decodeBase58(sessionStorage.getItem('keyPairSecretKey'))
+            };
+            console.log("Paire de clés chargée depuis sessionStorage");
+        } else {
+            keyPair = nacl.box.keyPair();
+            sessionStorage.setItem('keyPairPublicKey', encodeBase58(keyPair.publicKey));
+            sessionStorage.setItem('keyPairSecretKey', encodeBase58(keyPair.secretKey));
+            console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
+        }
         const dappEncryptionPublicKey = encodeBase58(keyPair.publicKey);
-        console.log("Generated dappEncryptionPublicKey:", dappEncryptionPublicKey);
+        console.log("Clé publique d'app chiffrée (dappEncryptionPublicKey) :", dappEncryptionPublicKey);
 
         function generateQRCode() {
             const appUrl = window.location.origin;
@@ -77,7 +121,7 @@
 
             const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=mainnet-beta&redirect_link=${encodeURIComponent(redirectLink)}`;
 
-            console.log('Generated Phantom Deep Link:', phantomDeepLink);
+            console.log('Lien Phantom Deep Link généré :', phantomDeepLink);
 
             // Nettoyer le conteneur QRCode avant de générer un nouveau
             document.getElementById("qrcode").innerHTML = "";
@@ -91,17 +135,17 @@
         }
 
         function decryptPayload(data, nonce, sharedSecret) {
-            console.log("Decrypting payload with sharedSecret:", sharedSecret);
+            console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
             const decodedData = decodeBase58(data);
             const decodedNonce = decodeBase58(nonce);
-            console.log("Decoded Data:", decodedData);
-            console.log("Decoded Nonce:", decodedNonce);
+            console.log("Données décodées :", decodedData);
+            console.log("Nonce décodé :", decodedNonce);
 
             const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
             if (!decryptedData) {
                 throw new Error("Erreur de déchiffrement.");
             }
-            console.log("Decrypted Data:", decryptedData);
+            console.log("Données déchiffrées :", decryptedData);
             return JSON.parse(new TextDecoder().decode(decryptedData));
         }
 
@@ -111,21 +155,22 @@
             const nonce = urlParams.get('nonce');
             const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
 
-            console.log('Data:', data);
-            console.log('Nonce:', nonce);
-            console.log('Phantom Encryption Public Key:', phantomEncryptionPublicKey);
+            console.log('Paramètres reçus :');
+            console.log('data :', data);
+            console.log('nonce :', nonce);
+            console.log('phantom_encryption_public_key :', phantomEncryptionPublicKey);
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
                     const sharedSecret = nacl.box.before(decodeBase58(phantomEncryptionPublicKey), keyPair.secretKey);
-                    console.log("Shared Secret generated:", sharedSecret);
+                    console.log("Shared Secret généré :", sharedSecret);
 
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
                     const publicKey = decryptedData.public_key;
-                    console.log('Clé publique du wallet:', publicKey);
+                    console.log('Clé publique du wallet récupérée :', publicKey);
                     return publicKey;
                 } catch (error) {
-                    console.error('Erreur lors du déchiffrement ou récupération de la clé publique:', error);
+                    console.error('Erreur lors du déchiffrement ou de la récupération de la clé publique :', error);
                 }
             } else {
                 console.error('Paramètres manquants dans l\'URL');
