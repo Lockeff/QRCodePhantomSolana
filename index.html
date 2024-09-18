@@ -5,7 +5,7 @@
     <title>Connexion à Phantom Wallet via QR Code</title>
     <!-- Inclure QRCode.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- Inclure tweetnacl.js pour les opérations cryptographiques -->
+    <!-- Inclure tweetnacl pour les opérations cryptographiques -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
     <!-- Inclure TextDecoder pour les anciens navigateurs -->
     <script>
@@ -35,6 +35,9 @@
     <pre id="logs" style="white-space: pre-wrap; background-color: #f0f0f0; padding: 10px;"></pre>
 
     <script>
+        // Effacer sessionStorage au démarrage
+        sessionStorage.clear();
+
         // Fonction de log
         (function() {
             const oldLog = console.log;
@@ -67,13 +70,33 @@
         // Générer ou récupérer la paire de clés
         function getKeyPair() {
             let keyPair;
-            if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
-                keyPair = {
-                    publicKey: new Uint8Array(JSON.parse(sessionStorage.getItem('keyPairPublicKey'))),
-                    secretKey: new Uint8Array(JSON.parse(sessionStorage.getItem('keyPairSecretKey')))
-                };
-                console.log("Paire de clés chargée depuis sessionStorage");
-            } else {
+            try {
+                if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
+                    let publicKeyData = sessionStorage.getItem('keyPairPublicKey');
+                    let secretKeyData = sessionStorage.getItem('keyPairSecretKey');
+                    console.log('publicKeyData from sessionStorage:', publicKeyData);
+                    console.log('secretKeyData from sessionStorage:', secretKeyData);
+
+                    let publicKeyArray = JSON.parse(publicKeyData);
+                    let secretKeyArray = JSON.parse(secretKeyData);
+
+                    console.log('publicKeyArray:', publicKeyArray);
+                    console.log('secretKeyArray:', secretKeyArray);
+
+                    keyPair = {
+                        publicKey: new Uint8Array(publicKeyArray),
+                        secretKey: new Uint8Array(secretKeyArray)
+                    };
+                    console.log("Paire de clés chargée depuis sessionStorage");
+                } else {
+                    throw new Error('No key pair in sessionStorage');
+                }
+            } catch (e) {
+                console.error('Erreur lors de la récupération de la paire de clés depuis sessionStorage :', e);
+                // Effacer sessionStorage pour supprimer les données invalides
+                sessionStorage.removeItem('keyPairPublicKey');
+                sessionStorage.removeItem('keyPairSecretKey');
+                // Générer une nouvelle paire de clés
                 keyPair = nacl.box.keyPair();
                 sessionStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
                 sessionStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
