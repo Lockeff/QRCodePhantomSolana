@@ -38,6 +38,73 @@
         // Effacer sessionStorage au démarrage
         sessionStorage.clear();
 
+        // Fonctions d'encodage et de décodage Base58
+        const Base58 = (function () {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const ALPHABET_MAP = {};
+            for (let i = 0; i < ALPHABET.length; i++) {
+                ALPHABET_MAP[ALPHABET.charAt(i)] = i;
+            }
+            const BASE = ALPHABET.length;
+
+            function encode(buffer) {
+                if (buffer.length === 0) return '';
+                let digits = [0];
+                for (let i = 0; i < buffer.length; i++) {
+                    let carry = buffer[i];
+                    for (let j = 0; j < digits.length; j++) {
+                        digits[j] <<= 8;
+                    }
+                    digits[0] += carry;
+                    let overflow = 0;
+                    for (let k = 0; k < digits.length; ++k) {
+                        digits[k] += overflow;
+                        overflow = (digits[k] / BASE) | 0;
+                        digits[k] %= BASE;
+                    }
+                    while (overflow) {
+                        digits.push(overflow % BASE);
+                        overflow = (overflow / BASE) | 0;
+                    }
+                }
+                let string = '';
+                for (let q = digits.length - 1; q >= 0; q--) {
+                    string += ALPHABET[digits[q]];
+                }
+                return string;
+            }
+
+            function decode(string) {
+                if (string.length === 0) return new Uint8Array(0);
+                let bytes = [0];
+                for (let i = 0; i < string.length; i++) {
+                    const c = string[i];
+                    if (!(c in ALPHABET_MAP)) throw new Error('Caractère invalide');
+                    let value = ALPHABET_MAP[c];
+                    for (let j = 0; j < bytes.length; j++) {
+                        bytes[j] *= BASE;
+                    }
+                    bytes[0] += value;
+                    let overflow = 0;
+                    for (let k = 0; k < bytes.length; ++k) {
+                        bytes[k] += overflow;
+                        overflow = bytes[k] >> 8;
+                        bytes[k] &= 0xff;
+                    }
+                    while (overflow) {
+                        bytes.push(overflow & 0xff);
+                        overflow >>= 8;
+                    }
+                }
+                return new Uint8Array(bytes.reverse());
+            }
+
+            return {
+                encode: encode,
+                decode: decode
+            };
+        })();
+
         // Fonction de log
         (function() {
             const oldLog = console.log;
@@ -105,34 +172,13 @@
             return keyPair;
         }
 
-        // Encodage et décodage Base64
-        function arrayBufferToBase64(buffer) {
-            let binary = '';
-            const bytes = new Uint8Array(buffer);
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return window.btoa(binary);
-        }
-
-        function base64ToArrayBuffer(base64) {
-            const binary_string = window.atob(base64);
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binary_string.charCodeAt(i);
-            }
-            return bytes;
-        }
-
         // Générer le QR Code
         function generateQRCode() {
             try {
                 const keyPair = getKeyPair();
                 console.log("keyPair dans generateQRCode :", keyPair);
-                const dappPublicKey = arrayBufferToBase64(keyPair.publicKey);
-                console.log("Clé publique de chiffrement de l'application (Base64) :", dappPublicKey);
+                const dappPublicKey = Base58.encode(keyPair.publicKey);
+                console.log("Clé publique de chiffrement de l'application (Base58) :", dappPublicKey);
 
                 const appUrl = window.location.origin;
                 const redirectLink = window.location.href;
@@ -162,8 +208,8 @@
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
             try {
-                const decodedData = base64ToArrayBuffer(data);
-                const decodedNonce = base64ToArrayBuffer(nonce);
+                const decodedData = Base58.decode(data);
+                const decodedNonce = Base58.decode(nonce);
 
                 console.log("Données décodées :", decodedData);
                 console.log("Nonce décodé :", decodedNonce);
@@ -196,7 +242,7 @@
                 try {
                     const keyPair = getKeyPair();
 
-                    const phantomPublicKeyBytes = base64ToArrayBuffer(phantomPublicKey);
+                    const phantomPublicKeyBytes = Base58.decode(phantomPublicKey);
 
                     // Calculer le secret partagé
                     const sharedSecret = nacl.scalarMult(keyPair.secretKey, phantomPublicKeyBytes);
