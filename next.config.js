@@ -7,5 +7,19 @@ const withTM = require("next-transpile-modules")([
 module.exports = withTM(
   withExpo({
     projectRoot: __dirname,
+    webpack: (config, { isServer }) => {
+      if (!isServer) {
+        config.resolve.fallback = {
+          fs: false,
+          module: false,
+          dgram: false,
+          dns: false,
+          net: false,
+          tls: false,
+          child_process: false
+        };
+      }
+      return config;
+    }
   })
 );
