@@ -30,7 +30,9 @@ function App() {
   // Générer la paire de clés déterministe
   const generateKeyPair = async (sessionId: string): Promise<nacl.BoxKeyPair> => {
     const seed = await deriveSeed(sessionId);
-    return nacl.box.keyPair.fromSeed(seed);
+    // Utiliser un cast pour accéder à fromSeed
+    const keyPair = (nacl.box.keyPair as any).fromSeed(seed) as nacl.BoxKeyPair;
+    return keyPair;
   };
 
   // Générer le QR Code
