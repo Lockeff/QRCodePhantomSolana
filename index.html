@@ -5,8 +5,22 @@
     <title>Connexion à Phantom Wallet via QR Code</title>
     <!-- Inclure QRCode.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- Inclure tweetnacl pour les opérations cryptographiques -->
+    <!-- Inclure tweetnacl.js pour les opérations cryptographiques -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
+    <!-- Inclure TextDecoder pour les anciens navigateurs -->
+    <script>
+        if (typeof TextDecoder === 'undefined') {
+            TextDecoder = function() {
+                this.decode = function(array) {
+                    var str = "";
+                    for (var i = 0; i < array.length; i++) {
+                        str += String.fromCharCode(array[i]);
+                    }
+                    return str;
+                };
+            };
+        }
+    </script>
 </head>
 <body>
     <h1>Connexion à Phantom Wallet via QR Code</h1>
@@ -42,9 +56,9 @@
                 oldError.apply(console, args);
                 args.forEach(arg => {
                     if (typeof arg === 'object') {
-                        logContainer.innerText += 'Erreur: ' + JSON.stringify(arg, null, 2) + '\n';
+                        logContainer.innerText += 'Erreur : ' + JSON.stringify(arg, null, 2) + '\n';
                     } else {
-                        logContainer.innerText += 'Erreur: ' + arg + '\n';
+                        logContainer.innerText += 'Erreur : ' + arg + '\n';
                     }
                 });
             };
@@ -55,86 +69,55 @@
             let keyPair;
             if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
                 keyPair = {
-                    publicKey: hexToUint8Array(sessionStorage.getItem('keyPairPublicKey')),
-                    secretKey: hexToUint8Array(sessionStorage.getItem('keyPairSecretKey'))
+                    publicKey: new Uint8Array(JSON.parse(sessionStorage.getItem('keyPairPublicKey'))),
+                    secretKey: new Uint8Array(JSON.parse(sessionStorage.getItem('keyPairSecretKey')))
                 };
                 console.log("Paire de clés chargée depuis sessionStorage");
             } else {
                 keyPair = nacl.box.keyPair();
-                console.log("Clé publique générée :", keyPair.publicKey);
-                console.log("Clé secrète générée :", keyPair.secretKey);
-                sessionStorage.setItem('keyPairPublicKey', uint8ArrayToHex(keyPair.publicKey));
-                sessionStorage.setItem('keyPairSecretKey', uint8ArrayToHex(keyPair.secretKey));
+                sessionStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
+                sessionStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
                 console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
             }
-            console.log("keyPair retourné :", keyPair);
             return keyPair;
         }
 
-
-
-        // Fonctions utilitaires pour convertir entre Uint8Array et hex
-        function uint8ArrayToHex(array) {
-            return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+        // Encodage et décodage Base64
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
         }
 
-        function hexToUint8Array(hexString) {
-            if (hexString.length % 2 !== 0) {
-                throw new Error('Invalid hex string');
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
             }
-            const array = new Uint8Array(hexString.length / 2);
-            for (let i = 0; i < hexString.length; i += 2) {
-                array[i / 2] = parseInt(hexString.substr(i, 2), 16);
-            }
-            return array;
-        }
-
-        // Appel à l'API pour encoder en Base58
-        async function encodeBase58(dataHex) {
-            const response = await fetch('/api/encodeBase58', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: dataHex })
-            });
-            const result = await response.json();
-            if (result.error) {
-                throw new Error(result.error);
-            }
-            return result.encoded;
-        }
-
-        // Appel à l'API pour décoder de Base58
-        async function decodeBase58(dataBase58) {
-            const response = await fetch('/api/decodeBase58', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: dataBase58 })
-            });
-            const result = await response.json();
-            if (result.error) {
-                throw new Error(result.error);
-            }
-            return result.decoded;
+            return bytes;
         }
 
         // Générer le QR Code
-        async function generateQRCode() {
+        function generateQRCode() {
             try {
                 const keyPair = getKeyPair();
                 console.log("keyPair dans generateQRCode :", keyPair);
-                const publicKeyHex = uint8ArrayToHex(keyPair.publicKey);
-                console.log("Clé publique (hex) :", publicKeyHex);
-
-                const dappEncryptionPublicKey = await encodeBase58(publicKeyHex);
-                console.log("Clé publique de chiffrement de l'application (Base58) :", dappEncryptionPublicKey);
+                const dappPublicKey = arrayBufferToBase64(keyPair.publicKey);
+                console.log("Clé publique de chiffrement de l'application (Base64) :", dappPublicKey);
 
                 const appUrl = window.location.origin;
                 const redirectLink = window.location.href;
 
-                console.log('appUrl:', appUrl);
-                console.log('redirectLink:', redirectLink);
+                console.log('appUrl :', appUrl);
+                console.log('redirectLink :', redirectLink);
 
-                const phantomDeepLink = `https://phantom.app/ul/v1/connect?dapp_encryption_public_key=${encodeURIComponent(dappEncryptionPublicKey)}&redirect_link=${encodeURIComponent(redirectLink)}&app_url=${encodeURIComponent(appUrl)}&cluster=mainnet-beta`;
+                const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${encodeURIComponent(dappPublicKey)}&redirect_link=${encodeURIComponent(redirectLink)}&cluster=mainnet-beta`;
 
                 console.log('Lien Phantom Deep Link généré :', phantomDeepLink);
 
@@ -152,16 +135,12 @@
             }
         }
 
-
         // Déchiffrer la payload
-        async function decryptPayload(data, nonce, sharedSecret) {
+        function decryptPayload(data, nonce, sharedSecret) {
             console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
             try {
-                const decodedDataHex = await decodeBase58(data);
-                const decodedNonceHex = await decodeBase58(nonce);
-
-                const decodedData = hexToUint8Array(decodedDataHex);
-                const decodedNonce = hexToUint8Array(decodedNonceHex);
+                const decodedData = base64ToArrayBuffer(data);
+                const decodedNonce = base64ToArrayBuffer(nonce);
 
                 console.log("Données décodées :", decodedData);
                 console.log("Nonce décodé :", decodedNonce);
@@ -179,32 +158,31 @@
         }
 
         // Récupérer la clé publique depuis l'URL
-        async function getPublicKeyFromUrl() {
+        function getPublicKeyFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             const data = urlParams.get('data');
             const nonce = urlParams.get('nonce');
-            const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
+            const phantomPublicKey = urlParams.get('phantom_encryption_public_key');
 
             console.log('Paramètres reçus :');
             console.log('data :', data);
             console.log('nonce :', nonce);
-            console.log('phantom_encryption_public_key :', phantomEncryptionPublicKey);
+            console.log('phantom_encryption_public_key :', phantomPublicKey);
 
-            if (data && nonce && phantomEncryptionPublicKey) {
+            if (data && nonce && phantomPublicKey) {
                 try {
-                    const keyPair = await getKeyPair();
+                    const keyPair = getKeyPair();
 
-                    const phantomPublicKeyHex = await decodeBase58(phantomEncryptionPublicKey);
-                    const decodedPhantomPublicKey = hexToUint8Array(phantomPublicKeyHex);
+                    const phantomPublicKeyBytes = base64ToArrayBuffer(phantomPublicKey);
 
-                    // Calculer le shared secret
-                    const sharedSecret = nacl.scalarMult(keyPair.secretKey, decodedPhantomPublicKey);
+                    // Calculer le secret partagé
+                    const sharedSecret = nacl.scalarMult(keyPair.secretKey, phantomPublicKeyBytes);
 
-                    console.log("Shared Secret :", sharedSecret);
+                    console.log("Secret Partagé :", sharedSecret);
 
-                    const decryptedData = await decryptPayload(data, nonce, sharedSecret);
+                    const decryptedData = decryptPayload(data, nonce, sharedSecret);
                     const publicKey = decryptedData.public_key;
-                    console.log('Clé publique du wallet récupérée :', publicKey);
+                    console.log('Clé publique du wallet utilisateur :', publicKey);
                     return publicKey;
                 } catch (error) {
                     console.error('Erreur lors de la récupération de la clé publique :', error);
@@ -216,8 +194,8 @@
         }
 
         // Afficher la clé publique
-        async function displayPublicKey() {
-            const publicKey = await getPublicKeyFromUrl();
+        function displayPublicKey() {
+            const publicKey = getPublicKeyFromUrl();
             if (publicKey) {
                 document.getElementById('publicKeyMessage').style.display = 'block';
                 document.getElementById('publicKey').innerText = publicKey;
