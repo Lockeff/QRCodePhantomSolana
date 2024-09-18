@@ -6,7 +6,8 @@
     <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bs58/4.0.1/bs58.min.js"></script>
+    <!-- Inclure la version correcte de bs58 -->
+    <script src="https://unpkg.com/bs58@5.0.0/dist/bs58.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -20,6 +21,11 @@
         // Importation des modules nécessaires
         const nacl = window.nacl;
         const bs58 = window.bs58;
+
+        // Vérifier que bs58 est bien défini
+        if (!bs58) {
+            console.error('La librairie bs58 n\'est pas correctement chargée.');
+        }
 
         // Générer la paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
