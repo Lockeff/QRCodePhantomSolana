@@ -35,9 +35,6 @@
     <pre id="logs" style="white-space: pre-wrap; background-color: #f0f0f0; padding: 10px;"></pre>
 
     <script>
-        // Supprimer l'effacement de sessionStorage
-        // sessionStorage.clear(); // <-- COMMENTÉ
-
         // Fonctions d'encodage et de décodage Base58
         const Base58 = (function () {
             const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -138,11 +135,11 @@
         function getKeyPair() {
             let keyPair;
             try {
-                if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
-                    let publicKeyData = sessionStorage.getItem('keyPairPublicKey');
-                    let secretKeyData = sessionStorage.getItem('keyPairSecretKey');
-                    console.log('publicKeyData from sessionStorage:', publicKeyData);
-                    console.log('secretKeyData from sessionStorage:', secretKeyData);
+                if (localStorage.getItem('keyPairPublicKey') && localStorage.getItem('keyPairSecretKey')) {
+                    let publicKeyData = localStorage.getItem('keyPairPublicKey');
+                    let secretKeyData = localStorage.getItem('keyPairSecretKey');
+                    console.log('publicKeyData from localStorage:', publicKeyData);
+                    console.log('secretKeyData from localStorage:', secretKeyData);
 
                     let publicKeyArray = JSON.parse(publicKeyData);
                     let secretKeyArray = JSON.parse(secretKeyData);
@@ -154,24 +151,24 @@
                         publicKey: new Uint8Array(publicKeyArray),
                         secretKey: new Uint8Array(secretKeyArray)
                     };
-                    console.log("Paire de clés chargée depuis sessionStorage");
+                    console.log("Paire de clés chargée depuis localStorage");
                 } else {
                     // Générer une nouvelle paire de clés uniquement si aucune paire n'est stockée
                     keyPair = nacl.box.keyPair();
-                    sessionStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
-                    sessionStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
-                    console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
+                    localStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
+                    localStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
+                    console.log("Nouvelle paire de clés générée et stockée dans localStorage");
                 }
             } catch (e) {
-                console.error('Erreur lors de la récupération de la paire de clés depuis sessionStorage :', e);
-                // Effacer sessionStorage pour supprimer les données invalides
-                sessionStorage.removeItem('keyPairPublicKey');
-                sessionStorage.removeItem('keyPairSecretKey');
+                console.error('Erreur lors de la récupération de la paire de clés depuis localStorage :', e);
+                // Effacer localStorage pour supprimer les données invalides
+                localStorage.removeItem('keyPairPublicKey');
+                localStorage.removeItem('keyPairSecretKey');
                 // Générer une nouvelle paire de clés
                 keyPair = nacl.box.keyPair();
-                sessionStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
-                sessionStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
-                console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
+                localStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
+                localStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
+                console.log("Nouvelle paire de clés générée et stockée dans localStorage");
             }
             return keyPair;
         }
@@ -185,7 +182,7 @@
                 console.log("Clé publique de chiffrement de l'application (Base58) :", dappPublicKey);
 
                 const appUrl = window.location.origin;
-                const redirectLink = window.location.href;
+                const redirectLink = window.location.origin + window.location.pathname; // Assurez-vous de ne pas inclure les paramètres
 
                 console.log('appUrl :', appUrl);
                 console.log('redirectLink :', redirectLink);
@@ -248,8 +245,8 @@
 
                     const phantomPublicKeyBytes = Base58.decode(phantomPublicKey);
 
-                    // Calculer le secret partagé
-                    const sharedSecret = nacl.scalarMult(keyPair.secretKey, phantomPublicKeyBytes);
+                    // Calculer le secret partagé en utilisant nacl.box.before
+                    const sharedSecret = nacl.box.before(phantomPublicKeyBytes, keyPair.secretKey);
 
                     console.log("Secret Partagé :", sharedSecret);
 
