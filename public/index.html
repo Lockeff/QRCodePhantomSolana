@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion à Phantom Wallet via QR Code</title>
+    <!-- Inclure QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Inclure tweetnacl pour les opérations cryptographiques -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
+</head>
+<body>
+    <h1>Connexion à Phantom Wallet via QR Code</h1>
+    <button id="connectButton">Générer le QR Code</button>
+    <div id="qrcode" style="margin-top: 20px;"></div>
+
+    <h2 id="publicKeyMessage" style="display: none;">Votre clé publique Solana :</h2>
+    <p id="publicKey"></p>
+
+    <!-- Logs -->
+    <h2>Logs :</h2>
+    <pre id="logs" style="white-space: pre-wrap; background-color: #f0f0f0; padding: 10px;"></pre>
+
+    <script>
+        // Fonction de log
+        (function() {
+            const oldLog = console.log;
+            const oldError = console.error;
+            const logContainer = document.getElementById('logs');
+
+            console.log = function(...args) {
+                oldLog.apply(console, args);
+                args.forEach(arg => {
+                    if (typeof arg === 'object') {
+                        logContainer.innerText += JSON.stringify(arg, null, 2) + '\n';
+                    } else {
+                        logContainer.innerText += arg + '\n';
+                    }
+                });
+            };
+
+            console.error = function(...args) {
+                oldError.apply(console, args);
+                args.forEach(arg => {
+                    if (typeof arg === 'object') {
+                        logContainer.innerText += 'Erreur: ' + JSON.stringify(arg, null, 2) + '\n';
+                    } else {
+                        logContainer.innerText += 'Erreur: ' + arg + '\n';
+                    }
+                });
+            };
+        })();
+
+        // Générer le QR Code
+        async function generateQRCode() {
+            try {
+                const response = await fetch('/api/generate-keypair');
+                const data = await response.json();
+                const dappEncryptionPublicKey = data.publicKey;
+                console.log("Clé publique de chiffrement de l'application :", dappEncryptionPublicKey);
+
+                const appUrl = window.location.origin;
+                const redirectLink = window.location.href;
+
+                const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=mainnet-beta&redirect_link=${encodeURIComponent(redirectLink)}`;
+
+                console.log('Lien Phantom Deep Link généré :', phantomDeepLink);
+
+                // Effacer le QR Code précédent
+                document.getElementById("qrcode").innerHTML = "";
+
+                new QRCode(document.getElementById("qrcode"), {
+                    text: phantomDeepLink,
+                    width: 200,
+                    height: 200,
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+            } catch (error) {
+                console.error('Erreur lors de la génération du QR Code :', error);
+            }
+        }
+
+        // Déchiffrer la payload
+        async function decryptPayload(data, nonce, sharedSecret) {
+            console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
+            try {
+                const decodedDataResponse = await fetch('/api/decode-base58', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data })
+                });
+                const decodedDataResult = await decodedDataResponse.json();
+                const decodedData = new Uint8Array(decodedDataResult.decoded);
+
+                const decodedNonceResponse = await fetch('/api/decode-base58', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: nonce })
+                });
+                const decodedNonceResult = await decodedNonceResponse.json();
+                const decodedNonce = new Uint8Array(decodedNonceResult.decoded);
+
+                console.log("Données décodées :", decodedData);
+                console.log("Nonce décodé :", decodedNonce);
+
+                const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
+                if (!decryptedData) {
+                    throw new Error("Échec du déchiffrement.");
+                }
+                console.log("Données déchiffrées :", decryptedData);
+                return JSON.parse(new TextDecoder().decode(decryptedData));
+            } catch (error) {
+                console.error('Erreur lors du déchiffrement de la payload :', error);
+                throw error;
+            }
+        }
+
+        // Récupérer la clé publique depuis l'URL
+        async function getPublicKeyFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const data = urlParams.get('data');
+            const nonce = urlParams.get('nonce');
+            const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
+
+            console.log('Paramètres reçus :');
+            console.log('data :', data);
+            console.log('nonce :', nonce);
+            console.log('phantom_encryption_public_key :', phantomEncryptionPublicKey);
+
+            if (data && nonce && phantomEncryptionPublicKey) {
+                try {
+                    const keyPairResponse = await fetch('/api/get-keypair');
+                    const keyPairData = await keyPairResponse.json();
+                    const secretKey = new Uint8Array(keyPairData.secretKey);
+
+                    // Décoder la clé publique de Phantom
+                    const decodedPhantomPublicKeyResponse = await fetch('/api/decode-base58', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data: phantomEncryptionPublicKey })
+                    });
+                    const decodedPhantomPublicKeyResult = await decodedPhantomPublicKeyResponse.json();
+                    const decodedPhantomPublicKey = new Uint8Array(decodedPhantomPublicKeyResult.decoded);
+
+                    // Calculer le shared secret
+                    const sharedSecret = nacl.scalarMult(secretKey, decodedPhantomPublicKey);
+
+                    console.log("Shared Secret :", sharedSecret);
+
+                    const decryptedData = await decryptPayload(data, nonce, sharedSecret);
+                    const publicKey = decryptedData.public_key;
+                    console.log('Clé publique du wallet récupérée :', publicKey);
+                    return publicKey;
+                } catch (error) {
+                    console.error('Erreur lors de la récupération de la clé publique :', error);
+                }
+            } else {
+                console.error('Paramètres manquants dans l\'URL');
+            }
+            return null;
+        }
+
+        // Afficher la clé publique
+        async function displayPublicKey() {
+            const publicKey = await getPublicKeyFromUrl();
+            if (publicKey) {
+                document.getElementById('publicKeyMessage').style.display = 'block';
+                document.getElementById('publicKey').innerText = publicKey;
+            }
+        }
+
+        // Écouteurs d'événements
+        document.getElementById("connectButton").addEventListener("click", () => {
+            generateQRCode();
+        });
+
+        window.addEventListener('load', function() {
+            displayPublicKey();
+        });
+    </script>
+</body>
+</html>
