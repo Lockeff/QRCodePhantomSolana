@@ -2,103 +2,42 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect to Phantom Wallet via QR Code</title>
+    <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stablelib/base58@1.0.1/lib/base58.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
-
-    <!-- QR code container -->
     <button id="connectButton">Generate QR Code</button>
     <div id="qrcode" style="margin-top: 20px;"></div>
 
-    <!-- Message pour afficher la clé publique après déchiffrement -->
-    <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key: </h2>
+    <h2 id="publicKeyMessage" style="display: none;">Your Solana Wallet Public Key:</h2>
     <p id="publicKey"></p>
 
     <script>
-        // Implémentation manuelle de bs58
-        (function () {
-            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-            const base = alphabet.length;
-
-            const bs58 = {
-                encode(buffer) {
-                    if (buffer.length === 0) return '';
-
-                    let digits = [0];
-                    for (let i = 0; i < buffer.length; ++i) {
-                        let carry = buffer[i];
-                        for (let j = 0; j < digits.length; ++j) {
-                            carry += digits[j] << 8;
-                            digits[j] = carry % base;
-                            carry = (carry / base) | 0;
-                        }
-                        while (carry > 0) {
-                            digits.push(carry % base);
-                            carry = (carry / base) | 0;
-                        }
-                    }
-
-                    let result = '';
-                    for (let k = 0; buffer[k] === 0 && k < buffer.length - 1; ++k) {
-                        result += alphabet[0];
-                    }
-                    for (let q = digits.length - 1; q >= 0; --q) {
-                        result += alphabet[digits[q]];
-                    }
-
-                    return result;
-                },
-
-                decode(string) {
-                    if (string.length === 0) return new Uint8Array(0);
-
-                    let bytes = [0];
-                    for (let i = 0; i < string.length; i++) {
-                        const value = alphabet.indexOf(string[i]);
-                        if (value === -1) throw new Error('Invalid character');
-
-                        let carry = value;
-                        for (let j = 0; j < bytes.length; ++j) {
-                            carry += bytes[j] * base;
-                            bytes[j] = carry & 0xff;
-                            carry >>= 8;
-                        }
-                        while (carry > 0) {
-                            bytes.push(carry & 0xff);
-                            carry >>= 8;
-                        }
-                    }
-
-                    let result = new Uint8Array(bytes.reverse());
-
-                    for (let k = 0; string[k] === alphabet[0] && k < string.length - 1; ++k) {
-                        result = new Uint8Array([0, ...result]);
-                    }
-
-                    return result;
-                }
-            };
-
-            // Exposer bs58 pour l'utiliser
-            window.bs58 = bs58;
-        })();
+        // Importation des modules nécessaires
+        const { decode: bs58Decode, encode: bs58Encode } = window.base58;
+        const nacl = window.nacl;
+        const { Buffer } = window.buffer;
 
         // Générer la paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
+        const dappEncryptionPublicKey = bs58Encode(Buffer.from(keyPair.publicKey));
         console.log("Generated dappEncryptionPublicKey:", dappEncryptionPublicKey);
 
         function generateQRCode() {
-            const appUrl = window.location.href;
+            const appUrl = window.location.origin;
             const redirectLink = window.location.href;
 
-            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=devnet&redirect_link=${encodeURIComponent(redirectLink)}`;
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=mainnet-beta&redirect_link=${encodeURIComponent(redirectLink)}`;
 
             console.log('Generated Phantom Deep Link:', phantomDeepLink);
+
+            // Nettoyer le conteneur QRCode avant de générer un nouveau
+            document.getElementById("qrcode").innerHTML = "";
 
             new QRCode(document.getElementById("qrcode"), {
                 text: phantomDeepLink,
@@ -110,8 +49,8 @@
 
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
-            const decodedData = bs58.decode(data);
-            const decodedNonce = bs58.decode(nonce);
+            const decodedData = bs58Decode(data);
+            const decodedNonce = bs58Decode(nonce);
             console.log("Decoded Data:", decodedData);
             console.log("Decoded Nonce:", decodedNonce);
 
@@ -132,11 +71,10 @@
             console.log('Data:', data);
             console.log('Nonce:', nonce);
             console.log('Phantom Encryption Public Key:', phantomEncryptionPublicKey);
-            console.log('Secret Key of Dapp:', keyPair.secretKey);
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
+                    const sharedSecret = nacl.box.before(bs58Decode(phantomEncryptionPublicKey), keyPair.secretKey);
                     console.log("Shared Secret generated:", sharedSecret);
 
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
