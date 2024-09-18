@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 
-function App() {
+const App: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [publicKey, setPublicKey] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
@@ -90,8 +90,11 @@ function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('sessionId');
+    const data = urlParams.get('data');
+    const nonce = urlParams.get('nonce');
+    const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
 
-    if (sessionId) {
+    if (sessionId && data && nonce && phantomEncryptionPublicKey) {
       logMessage('Paramètres de redirection détectés');
 
       const fetchAndDecrypt = async () => {
@@ -99,27 +102,19 @@ function App() {
           const keyPair = await generateKeyPair(sessionId);
           logMessage('Paire de clés dérivée à partir du sessionId');
 
-          // Simuler la récupération de données chiffrées (à ajuster selon votre logique)
-          // Ici, nous supposons que les paramètres 'data' et 'nonce' sont présents dans l'URL
-          const data = urlParams.get('data');
-          const nonce = urlParams.get('nonce');
+          const decodedPhantomPublicKey = bs58.decode(phantomEncryptionPublicKey);
+          const sharedSecret = nacl.box.before(decodedPhantomPublicKey, keyPair.secretKey);
+          logMessage('Secret partagé calculé');
 
-          if (data && nonce) {
-            const sharedSecret = nacl.box.before(bs58.decode(keyPair.publicKey), keyPair.secretKey);
-            logMessage('Secret partagé calculé');
+          const decryptedData = decryptPayload(data, nonce, sharedSecret);
+          logMessage('Données déchiffrées');
 
-            const decryptedData = decryptPayload(data, nonce, sharedSecret);
-            logMessage('Données déchiffrées');
+          // Afficher la clé publique du wallet utilisateur
+          setPublicKey(decryptedData.public_key);
+          logMessage(`Clé publique du wallet utilisateur : ${decryptedData.public_key}`);
 
-            // Afficher la clé publique du wallet utilisateur
-            setPublicKey(decryptedData.public_key);
-            logMessage(`Clé publique du wallet utilisateur : ${decryptedData.public_key}`);
-
-            // Nettoyer les paramètres de l'URL
-            window.history.replaceState({}, document.title, '/');
-          } else {
-            logMessage('Paramètres "data" et "nonce" manquants dans l\'URL');
-          }
+          // Nettoyer les paramètres de l'URL
+          window.history.replaceState({}, document.title, '/');
         } catch (error: any) {
           console.error('Erreur lors de la récupération de la clé publique :', error);
           logMessage(`Erreur : ${error.message}`);
@@ -128,6 +123,8 @@ function App() {
       };
 
       fetchAndDecrypt();
+    } else if (sessionId) {
+      logMessage('Paramètres "data" et "nonce" ou "phantom_encryption_public_key" manquants dans l\'URL');
     } else {
       logMessage('Aucune donnée de redirection à traiter');
     }
@@ -162,6 +159,6 @@ function App() {
       )}
     </div>
   );
-}
+};
 
 export default App;

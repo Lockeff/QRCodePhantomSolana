@@ -1,31 +1,36 @@
 {
-  "name": "phantom-qr-connector",
+  "name": "QRCodePhantomSolana",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "vercel-build": "react-scripts build"
-  },
   "dependencies": {
+    "bs58": "^5.0.0",
+    "buffer": "^6.0.3",
+    "qrcode": "^1.5.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "tweetnacl": "^1.0.3",
-    "bs58": "^5.0.0",
-    "qrcode": "^1.5.1",
-    "uuid": "^9.0.0",
-    "buffer": "^6.0.3"
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.4.3",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
-    "typescript": "^4.9.5",
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@types/uuid": "^9.0.1",
-    "@types/qrcode": "^1.4.3"
+    "typescript": "^4.9.5"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "vercel-build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
   },
   "browserslist": {
     "production": [
