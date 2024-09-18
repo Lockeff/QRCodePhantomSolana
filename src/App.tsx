@@ -27,12 +27,19 @@ function App() {
     return new Uint8Array(hashArray.slice(0, 32));
   };
 
+  // Fonction d'aide pour générer BoxKeyPair à partir du seed
+  const keyPairFromSeed = (seed: Uint8Array): nacl.BoxKeyPair => {
+    const signKeyPair = nacl.sign.keyPair.fromSeed(seed);
+    return {
+      publicKey: signKeyPair.publicKey.slice(0, 32),
+      secretKey: signKeyPair.secretKey.slice(0, 32),
+    };
+  };
+
   // Générer la paire de clés déterministe
   const generateKeyPair = async (sessionId: string): Promise<nacl.BoxKeyPair> => {
     const seed = await deriveSeed(sessionId);
-    // Utiliser un cast pour accéder à fromSeed
-    const keyPair = (nacl.box.keyPair as any).fromSeed(seed) as nacl.BoxKeyPair;
-    return keyPair;
+    return keyPairFromSeed(seed);
   };
 
   // Générer le QR Code
