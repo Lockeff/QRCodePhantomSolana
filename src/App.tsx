@@ -1,11 +1,9 @@
-// src/App.tsx
-
 import React, { useState, useEffect } from 'react';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'uuid';
-import './App.css';
+import { v4 as uuidv4 } from 'uuid'; // Utilisez uuid
+import './App.css'; // Assurez-vous que ce fichier existe
 
 function App() {
   const [keyPair, setKeyPair] = useState<nacl.BoxKeyPair | null>(null);
