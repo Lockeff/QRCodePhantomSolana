@@ -20,17 +20,17 @@
     <script>
         // Importation des modules nécessaires
         const nacl = window.nacl;
-        const bs58 = window.bs58 || window.solanaWeb3;
+        const { encode, decode } = window.solanaWeb3;
         const { PublicKey } = window.solanaWeb3;
 
-        // Vérifier que bs58 est bien défini
-        if (!bs58) {
-            console.error('La librairie bs58 n\'est pas correctement chargée.');
+        // Vérifier que les fonctions d'encodage/décodage sont bien définies
+        if (!encode || !decode) {
+            console.error('Les fonctions d\'encodage/décodage Base58 ne sont pas correctement chargées.');
         }
 
         // Générer la paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
+        const dappEncryptionPublicKey = encode(keyPair.publicKey);
         console.log("Generated dappEncryptionPublicKey:", dappEncryptionPublicKey);
 
         function generateQRCode() {
@@ -54,8 +54,8 @@
 
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
-            const decodedData = bs58.decode(data);
-            const decodedNonce = bs58.decode(nonce);
+            const decodedData = decode(data);
+            const decodedNonce = decode(nonce);
             console.log("Decoded Data:", decodedData);
             console.log("Decoded Nonce:", decodedNonce);
 
@@ -79,7 +79,7 @@
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
+                    const sharedSecret = nacl.box.before(decode(phantomEncryptionPublicKey), keyPair.secretKey);
                     console.log("Shared Secret generated:", sharedSecret);
 
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
