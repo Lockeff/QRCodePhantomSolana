@@ -51,8 +51,70 @@
             };
         })();
 
-        // URL du backend (à adapter si nécessaire)
-        const backendUrl = 'http://localhost:5000';
+        // Implémentation des fonctions encodeBase58 et decodeBase58
+        (function() {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const ALPHABET_MAP = {};
+            for (let i = 0; i < ALPHABET.length; i++) {
+                ALPHABET_MAP[ALPHABET.charAt(i)] = i;
+            }
+            const BASE = ALPHABET.length;
+
+            function encodeBase58(buffer) {
+                if (buffer.length === 0) return '';
+                let digits = [0];
+                for (let i = 0; i < buffer.length; i++) {
+                    let carry = buffer[i];
+                    for (let j = 0; j < digits.length; j++) {
+                        carry += digits[j] << 8;
+                        digits[j] = carry % BASE;
+                        carry = (carry / BASE) | 0;
+                    }
+                    while (carry > 0) {
+                        digits.push(carry % BASE);
+                        carry = (carry / BASE) | 0;
+                    }
+                }
+                // Ajout des zéros initiaux
+                for (let k = 0; buffer[k] === 0 && k < buffer.length - 1; k++) {
+                    digits.push(0);
+                }
+                return digits.reverse().map(digit => ALPHABET[digit]).join('');
+            }
+
+            function decodeBase58(string) {
+                if (string.length === 0) return new Uint8Array(0);
+                let bytes = [0];
+                for (let i = 0; i < string.length; i++) {
+                    const c = string[i];
+                    if (!(c in ALPHABET_MAP)) throw new Error('Invalid character');
+                    let carry = ALPHABET_MAP[c];
+                    for (let j = 0; j < bytes.length; j++) {
+                        carry += bytes[j] * BASE;
+                        bytes[j] = carry & 0xff;
+                        carry >>= 8;
+                    }
+                    while (carry > 0) {
+                        bytes.push(carry & 0xff);
+                        carry >>= 8;
+                    }
+                }
+                // Suppression des zéros initiaux
+                let leadingZeros = 0;
+                for (let k = 0; k < string.length && string[k] === ALPHABET[0]; k++) {
+                    leadingZeros++;
+                }
+                const result = new Uint8Array(bytes.reverse());
+                if (leadingZeros > 0) {
+                    const zeros = new Uint8Array(leadingZeros);
+                    result.set(zeros, 0);
+                }
+                return result;
+            }
+
+            window.encodeBase58 = encodeBase58;
+            window.decodeBase58 = decodeBase58;
+        })();
 
         // Charger libsodium
         let sodium;
@@ -61,25 +123,30 @@
             sodium = libsodium;
         })();
 
-        // Fonction pour récupérer la clé publique du backend
-        async function getDappEncryptionPublicKey() {
-            const response = await fetch(`${backendUrl}/generate-keypair`);
-            const data = await response.json();
-            if (data.publicKey) {
-                return data.publicKey;
+        // Fonction pour générer ou récupérer la paire de clés
+        async function getKeyPair() {
+            let keyPair;
+            if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
+                keyPair = {
+                    publicKey: decodeBase58(sessionStorage.getItem('keyPairPublicKey')),
+                    privateKey: decodeBase58(sessionStorage.getItem('keyPairSecretKey'))
+                };
+                console.log("Paire de clés chargée depuis sessionStorage");
             } else {
-                console.error('Erreur lors de la récupération de la clé publique du backend.');
-                return null;
+                await libsodium.ready;
+                keyPair = sodium.crypto_box_keypair();
+                sessionStorage.setItem('keyPairPublicKey', encodeBase58(keyPair.publicKey));
+                sessionStorage.setItem('keyPairSecretKey', encodeBase58(keyPair.privateKey));
+                console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
             }
+            return keyPair;
         }
 
         // Fonction pour générer le QR code
         async function generateQRCode() {
-            const dappEncryptionPublicKey = await getDappEncryptionPublicKey();
-            if (!dappEncryptionPublicKey) {
-                console.error('Impossible de générer le QR code sans clé publique.');
-                return;
-            }
+            const keyPair = await getKeyPair();
+            const dappEncryptionPublicKey = encodeBase58(keyPair.publicKey);
+            console.log("Clé publique d'app chiffrée (dappEncryptionPublicKey) :", dappEncryptionPublicKey);
 
             const appUrl = window.location.origin;
             const redirectLink = window.location.href;
@@ -99,40 +166,11 @@
             });
         }
 
-        // Fonction pour décoder les données Base58 en utilisant le backend
-        async function decodeBase58(data) {
-            const response = await fetch(`${backendUrl}/decode-base58`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data })
-            });
-            const result = await response.json();
-            if (result.decoded) {
-                return new Uint8Array(result.decoded);
-            } else {
-                throw new Error(result.error || 'Erreur lors du décodage Base58.');
-            }
-        }
-
-        // Fonction pour récupérer le keyPair du backend
-        async function getKeyPair() {
-            const response = await fetch(`${backendUrl}/keypair`);
-            const data = await response.json();
-            if (data.publicKey && data.secretKey) {
-                return {
-                    publicKey: new Uint8Array(data.publicKey),
-                    secretKey: new Uint8Array(data.secretKey)
-                };
-            } else {
-                throw new Error(data.error || 'Erreur lors de la récupération du keyPair.');
-            }
-        }
-
         // Fonction pour déchiffrer la payload
         async function decryptPayload(data, nonce, sharedSecret) {
             console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
-            const decodedData = await decodeBase58(data);
-            const decodedNonce = await decodeBase58(nonce);
+            const decodedData = decodeBase58(data);
+            const decodedNonce = decodeBase58(nonce);
             console.log("Données décodées :", decodedData);
             console.log("Nonce décodé :", decodedNonce);
 
@@ -165,11 +203,11 @@
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
                     const keyPair = await getKeyPair();
-                    const decodedPhantomPublicKey = await decodeBase58(phantomEncryptionPublicKey);
+                    const decodedPhantomPublicKey = decodeBase58(phantomEncryptionPublicKey);
 
                     // Calcul du sharedSecret
                     const sharedSecret = sodium.crypto_scalarmult(
-                        keyPair.secretKey,
+                        keyPair.privateKey,
                         decodedPhantomPublicKey
                     );
 

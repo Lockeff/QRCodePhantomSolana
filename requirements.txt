@@ -1,4 +1,0 @@
-Flask
-flask-cors
-base58
-pynacl
