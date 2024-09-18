@@ -6,7 +6,6 @@ import bs58 from 'bs58';
 import QRCode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
-import crypto from 'crypto';
 
 function App() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -20,14 +19,17 @@ function App() {
   };
 
   // Fonction pour dériver un seed à partir du sessionId
-  const deriveSeed = (sessionId: string): Uint8Array => {
-    const hash = crypto.createHash('sha256').update(sessionId).digest();
-    return new Uint8Array(hash.slice(0, 32)); // TweetNaCl nécessite un seed de 32 octets
+  const deriveSeed = async (sessionId: string): Promise<Uint8Array> => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(sessionId);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return new Uint8Array(hashArray.slice(0, 32));
   };
 
   // Générer la paire de clés déterministe
-  const generateKeyPair = (sessionId: string): nacl.BoxKeyPair => {
-    const seed = deriveSeed(sessionId);
+  const generateKeyPair = async (sessionId: string): Promise<nacl.BoxKeyPair> => {
+    const seed = await deriveSeed(sessionId);
     return nacl.box.keyPair.fromSeed(seed);
   };
 
@@ -36,21 +38,21 @@ function App() {
     const sessionId = uuidv4();
     logMessage(`Session ID généré : ${sessionId}`);
 
-    const keyPair = generateKeyPair(sessionId);
-    logMessage('Paire de clés générée de manière déterministe');
-
-    const appUrl = window.location.origin;
-    const redirectLink = `${appUrl}/?sessionId=${encodeURIComponent(sessionId)}`;
-
-    const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(
-      appUrl
-    )}&dapp_encryption_public_key=${encodeURIComponent(bs58.encode(keyPair.publicKey))}&redirect_link=${encodeURIComponent(
-      redirectLink
-    )}&cluster=mainnet-beta`;
-
-    logMessage(`Lien Phantom Deep Link généré : ${phantomDeepLink}`);
-
     try {
+      const keyPair = await generateKeyPair(sessionId);
+      logMessage('Paire de clés générée de manière déterministe');
+
+      const appUrl = window.location.origin;
+      const redirectLink = `${appUrl}/?sessionId=${encodeURIComponent(sessionId)}`;
+
+      const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(
+        appUrl
+      )}&dapp_encryption_public_key=${encodeURIComponent(bs58.encode(keyPair.publicKey))}&redirect_link=${encodeURIComponent(
+        redirectLink
+      )}&cluster=mainnet-beta`;
+
+      logMessage(`Lien Phantom Deep Link généré : ${phantomDeepLink}`);
+
       const qrCodeDataUrl = await QRCode.toDataURL(phantomDeepLink);
       setQrCodeUrl(qrCodeDataUrl);
       logMessage('QR Code généré');
@@ -72,7 +74,7 @@ function App() {
       throw new Error('Échec du déchiffrement');
     }
 
-    return JSON.parse(Buffer.from(decryptedData).toString('utf8'));
+    return JSON.parse(new TextDecoder().decode(decryptedData));
   };
 
   // Récupérer la clé publique depuis l'URL
@@ -83,36 +85,40 @@ function App() {
     if (sessionId) {
       logMessage('Paramètres de redirection détectés');
 
-      try {
-        const keyPair = generateKeyPair(sessionId);
-        logMessage('Paire de clés dérivée à partir du sessionId');
+      const fetchAndDecrypt = async () => {
+        try {
+          const keyPair = await generateKeyPair(sessionId);
+          logMessage('Paire de clés dérivée à partir du sessionId');
 
-        // Simuler la récupération de données chiffrées (à ajuster selon votre logique)
-        // Ici, nous supposons que les paramètres 'data' et 'nonce' sont présents dans l'URL
-        const data = urlParams.get('data');
-        const nonce = urlParams.get('nonce');
+          // Simuler la récupération de données chiffrées (à ajuster selon votre logique)
+          // Ici, nous supposons que les paramètres 'data' et 'nonce' sont présents dans l'URL
+          const data = urlParams.get('data');
+          const nonce = urlParams.get('nonce');
 
-        if (data && nonce) {
-          const sharedSecret = nacl.box.before(bs58.decode(keyPair.publicKey), keyPair.secretKey);
-          logMessage('Secret partagé calculé');
+          if (data && nonce) {
+            const sharedSecret = nacl.box.before(bs58.decode(keyPair.publicKey), keyPair.secretKey);
+            logMessage('Secret partagé calculé');
 
-          const decryptedData = decryptPayload(data, nonce, sharedSecret);
-          logMessage('Données déchiffrées');
+            const decryptedData = decryptPayload(data, nonce, sharedSecret);
+            logMessage('Données déchiffrées');
 
-          // Afficher la clé publique du wallet utilisateur
-          setPublicKey(decryptedData.public_key);
-          logMessage(`Clé publique du wallet utilisateur : ${decryptedData.public_key}`);
+            // Afficher la clé publique du wallet utilisateur
+            setPublicKey(decryptedData.public_key);
+            logMessage(`Clé publique du wallet utilisateur : ${decryptedData.public_key}`);
 
-          // Nettoyer les paramètres de l'URL
-          window.history.replaceState({}, document.title, '/');
-        } else {
-          logMessage('Paramètres "data" et "nonce" manquants dans l\'URL');
+            // Nettoyer les paramètres de l'URL
+            window.history.replaceState({}, document.title, '/');
+          } else {
+            logMessage('Paramètres "data" et "nonce" manquants dans l\'URL');
+          }
+        } catch (error: any) {
+          console.error('Erreur lors de la récupération de la clé publique :', error);
+          logMessage(`Erreur : ${error.message}`);
+          setError(error.message);
         }
-      } catch (error: any) {
-        console.error('Erreur lors de la récupération de la clé publique :', error);
-        logMessage(`Erreur : ${error.message}`);
-        setError(error.message);
-      }
+      };
+
+      fetchAndDecrypt();
     } else {
       logMessage('Aucune donnée de redirection à traiter');
     }
