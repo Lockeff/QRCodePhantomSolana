@@ -6,8 +6,8 @@
     <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <!-- Inclure la version correcte de bs58 -->
-    <script src="https://unpkg.com/bs58@5.0.0/dist/bs58.min.js"></script>
+    <!-- Inclure Solana Web3.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.76.0/lib/index.iife.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -20,7 +20,8 @@
     <script>
         // Importation des modules nécessaires
         const nacl = window.nacl;
-        const bs58 = window.bs58;
+        const bs58 = window.bs58 || window.solanaWeb3;
+        const { PublicKey } = window.solanaWeb3;
 
         // Vérifier que bs58 est bien défini
         if (!bs58) {
