@@ -1,6 +1,6 @@
 // src/App.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import QRCode from 'qrcode';
@@ -37,10 +37,10 @@ const App: React.FC = () => {
   };
 
   // Générer la paire de clés déterministe
-  const generateKeyPair = async (sessionId: string): Promise<nacl.BoxKeyPair> => {
+  const generateKeyPair = useCallback(async (sessionId: string): Promise<nacl.BoxKeyPair> => {
     const seed = await deriveSeed(sessionId);
     return keyPairFromSeed(seed);
-  };
+  }, []);
 
   // Générer le QR Code
   const generateQRCode = async () => {
@@ -128,7 +128,7 @@ const App: React.FC = () => {
     } else {
       logMessage('Aucune donnée de redirection à traiter');
     }
-  }, []);
+  }, [generateKeyPair]);
 
   return (
     <div className="App">
