@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion à Phantom Wallet via QR Code</title>
+    <!-- Inclure QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Inclure tweetnacl pour les opérations cryptographiques -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
+    <!-- Inclure bs58 pour Base58 encoding/decoding -->
+    <script src="https://unpkg.com/bs58@5.0.0/dist/bs58.min.js"></script>
+    <!-- Inclure TextDecoder pour les anciens navigateurs -->
+    <script>
+        if (typeof TextDecoder === 'undefined') {
+            TextDecoder = function() {
+                this.decode = function(array) {
+                    var str = "";
+                    for (var i = 0; i < array.length; i++) {
+                        str += String.fromCharCode(array[i]);
+                    }
+                    return str;
+                };
+            };
+        }
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        #qrcode {
+            margin-top: 20px;
+        }
+        #logs {
+            white-space: pre-wrap;
+            background-color: #111;
+            padding: 10px;
+            width: 100%;
+            max-width: 600px;
+            height: 200px;
+            overflow-y: scroll;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Connexion à Phantom Wallet via QR Code</h1>
+    <button id="connectButton">Générer le QR Code</button>
+    <div id="qrcode"></div>
+
+    <h2 id="publicKeyMessage" style="display: none;">Votre clé publique Solana :</h2>
+    <p id="publicKey"></p>
+
+    <h2>Logs :</h2>
+    <div id="logs"></div>
+
+    <script>
+        // Fonction de log
+        (function() {
+            const oldLog = console.log;
+            const oldError = console.error;
+            const logContainer = document.getElementById('logs');
+
+            console.log = function(...args) {
+                oldLog.apply(console, args);
+                args.forEach(arg => {
+                    if (typeof arg === 'object') {
+                        logContainer.innerText += JSON.stringify(arg, null, 2) + '\n';
+                    } else {
+                        logContainer.innerText += arg + '\n';
+                    }
+                });
+            };
+
+            console.error = function(...args) {
+                oldError.apply(console, args);
+                args.forEach(arg => {
+                    if (typeof arg === 'object') {
+                        logContainer.innerText += 'Erreur : ' + JSON.stringify(arg, null, 2) + '\n';
+                    } else {
+                        logContainer.innerText += 'Erreur : ' + arg + '\n';
+                    }
+                });
+            };
+        })();
+
+        // Fonction pour générer un UUID simple
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Générer ou récupérer la paire de clés
+        function getKeyPair() {
+            let keyPair;
+            try {
+                const publicKeyData = localStorage.getItem('keyPairPublicKey');
+                const secretKeyData = localStorage.getItem('keyPairSecretKey');
+                if (publicKeyData && secretKeyData) {
+                    console.log('publicKeyData from localStorage:', publicKeyData);
+                    console.log('secretKeyData from localStorage:', secretKeyData);
+
+                    const publicKeyArray = JSON.parse(publicKeyData);
+                    const secretKeyArray = JSON.parse(secretKeyData);
+
+                    console.log('publicKeyArray:', publicKeyArray);
+                    console.log('secretKeyArray:', secretKeyArray);
+
+                    keyPair = {
+                        publicKey: new Uint8Array(publicKeyArray),
+                        secretKey: new Uint8Array(secretKeyArray)
+                    };
+                    console.log("Paire de clés chargée depuis localStorage");
+                } else {
+                    // Générer une nouvelle paire de clés uniquement si aucune paire n'est stockée
+                    keyPair = nacl.box.keyPair();
+                    localStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
+                    localStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
+                    console.log("Nouvelle paire de clés générée et stockée dans localStorage");
+                }
+            } catch (e) {
+                console.error('Erreur lors de la récupération de la paire de clés depuis localStorage :', e);
+                // Effacer localStorage pour supprimer les données invalides
+                localStorage.removeItem('keyPairPublicKey');
+                localStorage.removeItem('keyPairSecretKey');
+                // Générer une nouvelle paire de clés
+                keyPair = nacl.box.keyPair();
+                localStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
+                localStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
+                console.log("Nouvelle paire de clés générée et stockée dans localStorage");
+            }
+            return keyPair;
+        }
+
+        // Générer le QR Code
+        async function generateQRCode() {
+            try {
+                const keyPair = getKeyPair();
+                console.log("keyPair dans generateQRCode :", keyPair);
+                const dappPublicKey = bs58.encode(keyPair.publicKey);
+                console.log("Clé publique de chiffrement de l'application (Base58) :", dappPublicKey);
+
+                const sessionId = generateUUID();
+                console.log("Session ID :", sessionId);
+
+                // Envoyer la paire de clés au backend pour stockage
+                const response = await fetch('/api/storeKeyPair', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        publicKey: Array.from(keyPair.publicKey),
+                        secretKey: Array.from(keyPair.secretKey)
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erreur lors du stockage de la paire de clés');
+                }
+
+                const appUrl = window.location.origin;
+                const redirectLink = `${window.location.origin}${window.location.pathname}?sessionId=${sessionId}`;
+
+                console.log('appUrl :', appUrl);
+                console.log('redirectLink :', redirectLink);
+
+                const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${encodeURIComponent(dappPublicKey)}&redirect_link=${encodeURIComponent(redirectLink)}&cluster=mainnet-beta`;
+
+                console.log('Lien Phantom Deep Link généré :', phantomDeepLink);
+
+                // Générer le QR Code
+                const qrcodeContainer = document.getElementById("qrcode");
+                qrcodeContainer.innerHTML = ""; // Effacer le QR Code précédent
+
+                new QRCode(qrcodeContainer, {
+                    text: phantomDeepLink,
+                    width: 256,
+                    height: 256,
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+
+                addLog('QR Code généré et affiché.');
+            } catch (error) {
+                console.error('Erreur lors de la génération du QR Code :', error);
+            }
+        }
+
+        // Déchiffrer la payload
+        function decryptPayload(data, nonce, sharedSecret) {
+            console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
+            try {
+                const decodedData = bs58.decode(data);
+                const decodedNonce = bs58.decode(nonce);
+
+                console.log("Données décodées :", decodedData);
+                console.log("Nonce décodé :", decodedNonce);
+
+                const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
+                if (!decryptedData) {
+                    throw new Error("Échec du déchiffrement.");
+                }
+                console.log("Données déchiffrées :", decryptedData);
+                return JSON.parse(new TextDecoder().decode(decryptedData));
+            } catch (error) {
+                console.error('Erreur lors du déchiffrement de la payload :', error);
+                throw error;
+            }
+        }
+
+        // Récupérer la clé publique depuis l'URL
+        async function getPublicKeyFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const data = urlParams.get('data');
+            const nonce = urlParams.get('nonce');
+            const phantomPublicKey = urlParams.get('phantom_encryption_public_key');
+            const sessionId = urlParams.get('sessionId');
+
+            console.log('Paramètres reçus :');
+            console.log('data :', data);
+            console.log('nonce :', nonce);
+            console.log('phantom_encryption_public_key :', phantomPublicKey);
+            console.log('sessionId :', sessionId);
+
+            if (data && nonce && phantomPublicKey && sessionId) {
+                try {
+                    // Récupérer la paire de clés depuis le backend
+                    const response = await fetch(`/api/getKeyPair?sessionId=${encodeURIComponent(sessionId)}`);
+                    if (!response.ok) {
+                        throw new Error('Erreur lors de la récupération de la paire de clés');
+                    }
+                    const { publicKey, secretKey } = await response.json();
+
+                    console.log('Paire de clés récupérée depuis le backend :', publicKey, secretKey);
+
+                    const keyPair = {
+                        publicKey: new Uint8Array(publicKey),
+                        secretKey: new Uint8Array(secretKey)
+                    };
+
+                    const phantomPublicKeyBytes = bs58.decode(phantomPublicKey);
+
+                    // Calculer le secret partagé en utilisant nacl.box.before
+                    const sharedSecret = nacl.box.before(phantomPublicKeyBytes, keyPair.secretKey);
+
+                    console.log("Secret Partagé :", sharedSecret);
+
+                    const decryptedData = decryptPayload(data, nonce, sharedSecret);
+                    const publicKeyWallet = decryptedData.public_key;
+                    console.log('Clé publique du wallet utilisateur :', publicKeyWallet);
+
+                    // Afficher la clé publique
+                    document.getElementById('publicKeyMessage').style.display = 'block';
+                    document.getElementById('publicKey').innerText = publicKeyWallet;
+
+                    addLog('Connexion réussie. Clé publique du wallet récupérée.');
+                } catch (error) {
+                    console.error('Erreur lors de la récupération de la clé publique :', error);
+                }
+            } else {
+                console.log('Aucune donnée à traiter.');
+            }
+        }
+
+        // Ajouter un log
+        function addLog(message) {
+            const logContainer = document.getElementById('logs');
+            logContainer.innerText += '> ' + message + '\n';
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Initialiser l'application
+        window.addEventListener('load', function() {
+            // Vérifier si l'URL contient des paramètres pour déchiffrer les données
+            getPublicKeyFromUrl();
+        });
+
+        // Écouteur pour le bouton "Générer le QR Code"
+        document.getElementById("connectButton").addEventListener("click", () => {
+            generateQRCode();
+        });
+    </script>
+</body>
+</html>
