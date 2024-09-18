@@ -6,8 +6,6 @@
     <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <!-- Inclure Solana Web3.js -->
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.76.0/lib/index.iife.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -20,17 +18,57 @@
     <script>
         // Importation des modules nécessaires
         const nacl = window.nacl;
-        const { encode, decode } = window.solanaWeb3;
-        const { PublicKey } = window.solanaWeb3;
 
-        // Vérifier que les fonctions d'encodage/décodage sont bien définies
-        if (!encode || !decode) {
-            console.error('Les fonctions d\'encodage/décodage Base58 ne sont pas correctement chargées.');
-        }
+        // Implémentation des fonctions encodeBase58 et decodeBase58
+        (function() {
+            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const base = BigInt(alphabet.length);
+
+            window.encodeBase58 = function(buffer) {
+                let num = BigInt('0x' + [...buffer].map(x => x.toString(16).padStart(2, '0')).join(''));
+                let encoded = '';
+                while (num > 0) {
+                    const remainder = num % base;
+                    num = num / base;
+                    encoded = alphabet[Number(remainder)] + encoded;
+                }
+                // Ajout des zéros initiaux
+                for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
+                    encoded = alphabet[0] + encoded;
+                }
+                return encoded;
+            };
+
+            window.decodeBase58 = function(string) {
+                let num = BigInt(0);
+                for (let i = 0; i < string.length; i++) {
+                    const char = string[i];
+                    const index = alphabet.indexOf(char);
+                    if (index === -1) {
+                        throw new Error('Caractère Base58 invalide');
+                    }
+                    num = num * base + BigInt(index);
+                }
+                // Conversion du nombre en tableau d'octets
+                let hex = num.toString(16);
+                if (hex.length % 2) {
+                    hex = '0' + hex;
+                }
+                const bytes = [];
+                for (let i = 0; i < hex.length; i += 2) {
+                    bytes.push(parseInt(hex.substr(i, 2), 16));
+                }
+                // Ajout des zéros initiaux
+                for (let i = 0; i < string.length && string[i] === alphabet[0]; i++) {
+                    bytes.unshift(0);
+                }
+                return new Uint8Array(bytes);
+            };
+        })();
 
         // Générer la paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = encode(keyPair.publicKey);
+        const dappEncryptionPublicKey = encodeBase58(keyPair.publicKey);
         console.log("Generated dappEncryptionPublicKey:", dappEncryptionPublicKey);
 
         function generateQRCode() {
@@ -54,8 +92,8 @@
 
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
-            const decodedData = decode(data);
-            const decodedNonce = decode(nonce);
+            const decodedData = decodeBase58(data);
+            const decodedNonce = decodeBase58(nonce);
             console.log("Decoded Data:", decodedData);
             console.log("Decoded Nonce:", decodedNonce);
 
@@ -79,7 +117,7 @@
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const sharedSecret = nacl.box.before(decode(phantomEncryptionPublicKey), keyPair.secretKey);
+                    const sharedSecret = nacl.box.before(decodeBase58(phantomEncryptionPublicKey), keyPair.secretKey);
                     console.log("Shared Secret generated:", sharedSecret);
 
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
