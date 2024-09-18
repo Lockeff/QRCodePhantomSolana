@@ -7,8 +7,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- Inclure tweetnacl pour les opérations cryptographiques -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <!-- Inclure bs58 pour l'encodage/décodage Base58 -->
-    <script src="https://cdn.jsdelivr.net/npm/bs58@4.0.1/dist/bs58.min.js"></script>
 </head>
 <body>
     <h1>Connexion à Phantom Wallet via QR Code</h1>
@@ -52,29 +50,74 @@
             };
         })();
 
-        // Générer ou récupérer la paire de clés côté client
-        function getKeyPair() {
+        // Générer ou récupérer la paire de clés
+        async function getKeyPair() {
             let keyPair;
             if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
                 keyPair = {
-                    publicKey: bs58.decode(sessionStorage.getItem('keyPairPublicKey')),
-                    secretKey: bs58.decode(sessionStorage.getItem('keyPairSecretKey'))
+                    publicKey: hexToUint8Array(sessionStorage.getItem('keyPairPublicKey')),
+                    secretKey: hexToUint8Array(sessionStorage.getItem('keyPairSecretKey'))
                 };
                 console.log("Paire de clés chargée depuis sessionStorage");
             } else {
                 keyPair = nacl.box.keyPair();
-                sessionStorage.setItem('keyPairPublicKey', bs58.encode(keyPair.publicKey));
-                sessionStorage.setItem('keyPairSecretKey', bs58.encode(keyPair.secretKey));
+                sessionStorage.setItem('keyPairPublicKey', uint8ArrayToHex(keyPair.publicKey));
+                sessionStorage.setItem('keyPairSecretKey', uint8ArrayToHex(keyPair.secretKey));
                 console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
             }
             return keyPair;
         }
 
+        // Fonctions utilitaires pour convertir entre Uint8Array et hex
+        function uint8ArrayToHex(array) {
+            return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function hexToUint8Array(hexString) {
+            if (hexString.length % 2 !== 0) {
+                throw new Error('Invalid hex string');
+            }
+            const array = new Uint8Array(hexString.length / 2);
+            for (let i = 0; i < hexString.length; i += 2) {
+                array[i / 2] = parseInt(hexString.substr(i, 2), 16);
+            }
+            return array;
+        }
+
+        // Appel à l'API pour encoder en Base58
+        async function encodeBase58(dataHex) {
+            const response = await fetch('/api/encodeBase58', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: dataHex })
+            });
+            const result = await response.json();
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            return result.encoded;
+        }
+
+        // Appel à l'API pour décoder de Base58
+        async function decodeBase58(dataBase58) {
+            const response = await fetch('/api/decodeBase58', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: dataBase58 })
+            });
+            const result = await response.json();
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            return result.decoded;
+        }
+
         // Générer le QR Code
         async function generateQRCode() {
             try {
-                const keyPair = getKeyPair();
-                const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
+                const keyPair = await getKeyPair();
+                const publicKeyHex = uint8ArrayToHex(keyPair.publicKey);
+                const dappEncryptionPublicKey = await encodeBase58(publicKeyHex);
                 console.log("Clé publique de chiffrement de l'application :", dappEncryptionPublicKey);
 
                 const appUrl = window.location.origin;
@@ -102,8 +145,11 @@
         async function decryptPayload(data, nonce, sharedSecret) {
             console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
             try {
-                const decodedData = bs58.decode(data);
-                const decodedNonce = bs58.decode(nonce);
+                const decodedDataHex = await decodeBase58(data);
+                const decodedNonceHex = await decodeBase58(nonce);
+
+                const decodedData = hexToUint8Array(decodedDataHex);
+                const decodedNonce = hexToUint8Array(decodedNonceHex);
 
                 console.log("Données décodées :", decodedData);
                 console.log("Nonce décodé :", decodedNonce);
@@ -130,14 +176,14 @@
             console.log('Paramètres reçus :');
             console.log('data :', data);
             console.log('nonce :', nonce);
-            console.log('phantom_encryption_public_key :', phantomEncryption_public_key);
+            console.log('phantom_encryption_public_key :', phantomEncryptionPublicKey);
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const keyPair = getKeyPair();
+                    const keyPair = await getKeyPair();
 
-                    // Décoder la clé publique de Phantom
-                    const decodedPhantomPublicKey = bs58.decode(phantomEncryptionPublicKey);
+                    const phantomPublicKeyHex = await decodeBase58(phantomEncryptionPublicKey);
+                    const decodedPhantomPublicKey = hexToUint8Array(phantomPublicKeyHex);
 
                     // Calculer le shared secret
                     const sharedSecret = nacl.scalarMult(keyPair.secretKey, decodedPhantomPublicKey);

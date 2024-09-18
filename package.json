@@ -2,7 +2,8 @@
     "name": "phantom-wallet-connect",
     "version": "1.0.0",
     "dependencies": {
-      "bs58": "^4.0.1"
+      "bs58": "^5.0.0",
+      "tweetnacl": "^1.0.3"
     }
   }
   
