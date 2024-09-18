@@ -124,7 +124,7 @@ const App: React.FC = () => {
 
       fetchAndDecrypt();
     } else if (sessionId) {
-      logMessage('Paramètres "data" et "nonce" ou "phantom_encryption_public_key" manquants dans l\'URL');
+      logMessage('Paramètres "data", "nonce" ou "phantom_encryption_public_key" manquants dans l\'URL');
     } else {
       logMessage('Aucune donnée de redirection à traiter');
     }
