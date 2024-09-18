@@ -51,7 +51,7 @@
         })();
 
         // Générer ou récupérer la paire de clés
-        async function getKeyPair() {
+        function getKeyPair() {
             let keyPair;
             if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
                 keyPair = {
@@ -61,12 +61,17 @@
                 console.log("Paire de clés chargée depuis sessionStorage");
             } else {
                 keyPair = nacl.box.keyPair();
+                console.log("Clé publique générée :", keyPair.publicKey);
+                console.log("Clé secrète générée :", keyPair.secretKey);
                 sessionStorage.setItem('keyPairPublicKey', uint8ArrayToHex(keyPair.publicKey));
                 sessionStorage.setItem('keyPairSecretKey', uint8ArrayToHex(keyPair.secretKey));
                 console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
             }
+            console.log("keyPair retourné :", keyPair);
             return keyPair;
         }
+
+
 
         // Fonctions utilitaires pour convertir entre Uint8Array et hex
         function uint8ArrayToHex(array) {
@@ -116,6 +121,7 @@
         async function generateQRCode() {
             try {
                 const keyPair = getKeyPair();
+                console.log("keyPair dans generateQRCode :", keyPair);
                 const publicKeyHex = uint8ArrayToHex(keyPair.publicKey);
                 console.log("Clé publique (hex) :", publicKeyHex);
 
