@@ -11,12 +11,13 @@ module.exports = withTM(
       if (!isServer) {
         config.resolve.fallback = {
           fs: false,
+          net: false,
+          tls: false,
           module: false,
           dgram: false,
           dns: false,
-          net: false,
-          tls: false,
-          child_process: false
+          http2: false,
+          child_process: false,
         };
       }
       return config;
