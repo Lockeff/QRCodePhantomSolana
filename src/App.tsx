@@ -1,17 +1,17 @@
-// src/App.js
+// src/App.tsx
 
 import React, { useState, useEffect } from 'react';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'react-uuid';
+import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 
 function App() {
-  const [keyPair, setKeyPair] = useState(null);
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [publicKey, setPublicKey] = useState('');
-  const [logs, setLogs] = useState([]);
+  const [keyPair, setKeyPair] = useState<nacl.BoxKeyPair | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [publicKey, setPublicKey] = useState<string>('');
+  const [logs, setLogs] = useState<string[]>([]);
 
   // Générer ou récupérer la paire de clés
   useEffect(() => {
@@ -33,7 +33,7 @@ function App() {
   }, []);
 
   // Fonction pour ajouter un message aux logs
-  const logMessage = (message) => {
+  const logMessage = (message: string) => {
     setLogs((prevLogs) => [...prevLogs, message]);
   };
 
@@ -80,14 +80,14 @@ function App() {
       const qrCodeDataUrl = await QRCode.toDataURL(phantomDeepLink);
       setQrCodeUrl(qrCodeDataUrl);
       logMessage('QR Code généré');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur lors de la génération du QR Code :', error);
       logMessage(`Erreur : ${error.message}`);
     }
   };
 
   // Déchiffrer la payload
-  const decryptPayload = (data, nonce, sharedSecret) => {
+  const decryptPayload = (data: string, nonce: string, sharedSecret: Uint8Array) => {
     if (!sharedSecret) {
       throw new Error('Secret partagé manquant');
     }
@@ -121,7 +121,7 @@ function App() {
         })
         .then((keyData) => {
           const { publicKey, secretKey } = keyData;
-          const retrievedKeyPair = {
+          const retrievedKeyPair: nacl.BoxKeyPair = {
             publicKey: new Uint8Array(publicKey),
             secretKey: new Uint8Array(secretKey),
           };
