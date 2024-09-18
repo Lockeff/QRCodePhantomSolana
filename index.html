@@ -35,8 +35,8 @@
     <pre id="logs" style="white-space: pre-wrap; background-color: #f0f0f0; padding: 10px;"></pre>
 
     <script>
-        // Effacer sessionStorage au démarrage
-        sessionStorage.clear();
+        // Supprimer l'effacement de sessionStorage
+        // sessionStorage.clear(); // <-- COMMENTÉ
 
         // Fonctions d'encodage et de décodage Base58
         const Base58 = (function () {
@@ -59,12 +59,12 @@
                     let overflow = 0;
                     for (let k = 0; k < digits.length; ++k) {
                         digits[k] += overflow;
-                        overflow = (digits[k] / BASE) | 0;
+                        overflow = Math.floor(digits[k] / BASE);
                         digits[k] %= BASE;
                     }
                     while (overflow) {
                         digits.push(overflow % BASE);
-                        overflow = (overflow / BASE) | 0;
+                        overflow = Math.floor(overflow / BASE);
                     }
                 }
                 let string = '';
@@ -88,12 +88,12 @@
                     let overflow = 0;
                     for (let k = 0; k < bytes.length; ++k) {
                         bytes[k] += overflow;
-                        overflow = bytes[k] >> 8;
-                        bytes[k] &= 0xff;
+                        overflow = Math.floor(bytes[k] / 256);
+                        bytes[k] %= 256;
                     }
                     while (overflow) {
-                        bytes.push(overflow & 0xff);
-                        overflow >>= 8;
+                        bytes.push(overflow % 256);
+                        overflow = Math.floor(overflow / 256);
                     }
                 }
                 return new Uint8Array(bytes.reverse());
@@ -156,7 +156,11 @@
                     };
                     console.log("Paire de clés chargée depuis sessionStorage");
                 } else {
-                    throw new Error('No key pair in sessionStorage');
+                    // Générer une nouvelle paire de clés uniquement si aucune paire n'est stockée
+                    keyPair = nacl.box.keyPair();
+                    sessionStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(keyPair.publicKey)));
+                    sessionStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(keyPair.secretKey)));
+                    console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
                 }
             } catch (e) {
                 console.error('Erreur lors de la récupération de la paire de clés depuis sessionStorage :', e);
