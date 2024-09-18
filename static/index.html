@@ -1,17 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Connect to Phantom Wallet via QR Code</title>
+    <title>Connecter à Phantom Wallet via QR Code</title>
     <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
-    <!-- Inclure la librairie bs58 -->
-    <script src="https://unpkg.com/bs58@4.0.1/umd/index.min.js"></script>
 </head>
 <body>
-    <h1>Connect to Phantom Wallet via QR Code</h1>
-    <button id="connectButton">Generate QR Code</button>
+    <h1>Connecter à Phantom Wallet via QR Code</h1>
+    <button id="connectButton">Générer QR Code</button>
     <div id="qrcode" style="margin-top: 20px;"></div>
 
     <h2 id="publicKeyMessage" style="display: none;">Votre clé publique Solana :</h2>
@@ -51,32 +48,26 @@
             };
         })();
 
-        const nacl = window.nacl;
-        const bs58 = window.bs58;
-
-        // Vérifier que bs58 est bien défini
-        if (!bs58) {
-            console.error('La librairie bs58 n\'est pas correctement chargée.');
+        // Fonction pour récupérer la clé publique du backend
+        async function getDappEncryptionPublicKey() {
+            const response = await fetch('http://localhost:5000/generate-keypair');
+            const data = await response.json();
+            if (data.publicKey) {
+                return data.publicKey;
+            } else {
+                console.error('Erreur lors de la récupération de la clé publique du backend.');
+                return null;
+            }
         }
 
-        // Générer ou récupérer la paire de clés publique/privée pour le chiffrement
-        let keyPair;
-        if (sessionStorage.getItem('keyPairPublicKey') && sessionStorage.getItem('keyPairSecretKey')) {
-            keyPair = {
-                publicKey: bs58.decode(sessionStorage.getItem('keyPairPublicKey')),
-                secretKey: bs58.decode(sessionStorage.getItem('keyPairSecretKey'))
-            };
-            console.log("Paire de clés chargée depuis sessionStorage");
-        } else {
-            keyPair = nacl.box.keyPair();
-            sessionStorage.setItem('keyPairPublicKey', bs58.encode(keyPair.publicKey));
-            sessionStorage.setItem('keyPairSecretKey', bs58.encode(keyPair.secretKey));
-            console.log("Nouvelle paire de clés générée et stockée dans sessionStorage");
-        }
-        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
-        console.log("Clé publique d'app chiffrée (dappEncryptionPublicKey) :", dappEncryptionPublicKey);
+        // Fonction pour générer le QR code
+        async function generateQRCode() {
+            const dappEncryptionPublicKey = await getDappEncryptionPublicKey();
+            if (!dappEncryptionPublicKey) {
+                console.error('Impossible de générer le QR code sans clé publique.');
+                return;
+            }
 
-        function generateQRCode() {
             const appUrl = window.location.origin;
             const redirectLink = window.location.href;
 
@@ -95,22 +86,8 @@
             });
         }
 
-        function decryptPayload(data, nonce, sharedSecret) {
-            console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
-            const decodedData = bs58.decode(data);
-            const decodedNonce = bs58.decode(nonce);
-            console.log("Données décodées :", decodedData);
-            console.log("Nonce décodé :", decodedNonce);
-
-            const decryptedData = nacl.box.open.after(decodedData, decodedNonce, sharedSecret);
-            if (!decryptedData) {
-                throw new Error("Erreur de déchiffrement.");
-            }
-            console.log("Données déchiffrées :", decryptedData);
-            return JSON.parse(new TextDecoder().decode(decryptedData));
-        }
-
-        function getPublicKeyFromUrl() {
+        // Fonction principale pour récupérer la clé publique depuis l'URL
+        async function getPublicKeyFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             const data = urlParams.get('data');
             const nonce = urlParams.get('nonce');
@@ -123,13 +100,20 @@
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
-                    console.log("Shared Secret généré :", sharedSecret);
+                    const response = await fetch('http://localhost:5000/decrypt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data, nonce, phantom_encryption_public_key: phantomEncryptionPublicKey })
+                    });
 
-                    const decryptedData = decryptPayload(data, nonce, sharedSecret);
-                    const publicKey = decryptedData.public_key;
-                    console.log('Clé publique du wallet récupérée :', publicKey);
-                    return publicKey;
+                    const result = await response.json();
+                    if (result.decryptedData && result.decryptedData.public_key) {
+                        const publicKey = result.decryptedData.public_key;
+                        console.log('Clé publique du wallet récupérée :', publicKey);
+                        return publicKey;
+                    } else {
+                        throw new Error(result.error || 'Erreur lors du déchiffrement.');
+                    }
                 } catch (error) {
                     console.error('Erreur lors du déchiffrement ou de la récupération de la clé publique :', error.message || error);
                 }
@@ -139,8 +123,9 @@
             return null;
         }
 
-        function displayPublicKey() {
-            const publicKey = getPublicKeyFromUrl();
+        // Fonction pour afficher la clé publique
+        async function displayPublicKey() {
+            const publicKey = await getPublicKeyFromUrl();
             if (publicKey) {
                 document.getElementById('publicKeyMessage').style.display = 'block';
                 document.getElementById('publicKey').innerText = publicKey;
