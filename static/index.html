@@ -1,14 +1,17 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Connecter à Phantom Wallet via QR Code</title>
+    <title>Connect to Phantom Wallet via QR Code</title>
     <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Nous n'avons plus besoin de tweetnacl côté client -->
+    <!-- Inclure libsodium pour les opérations cryptographiques -->
+    <script src="https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.10/dist/libsodium-wrappers.min.js"></script>
 </head>
 <body>
-    <h1>Connecter à Phantom Wallet via QR Code</h1>
-    <button id="connectButton">Générer QR Code</button>
+    <h1>Connect to Phantom Wallet via QR Code</h1>
+    <button id="connectButton">Generate QR Code</button>
     <div id="qrcode" style="margin-top: 20px;"></div>
 
     <h2 id="publicKeyMessage" style="display: none;">Votre clé publique Solana :</h2>
@@ -48,9 +51,19 @@
             };
         })();
 
+        // URL du backend (à adapter si nécessaire)
+        const backendUrl = 'http://localhost:5000';
+
+        // Charger libsodium
+        let sodium;
+        (async () => {
+            await libsodium.ready;
+            sodium = libsodium;
+        })();
+
         // Fonction pour récupérer la clé publique du backend
         async function getDappEncryptionPublicKey() {
-            const response = await fetch('http://localhost:5000/generate-keypair');
+            const response = await fetch(`${backendUrl}/generate-keypair`);
             const data = await response.json();
             if (data.publicKey) {
                 return data.publicKey;
@@ -86,6 +99,57 @@
             });
         }
 
+        // Fonction pour décoder les données Base58 en utilisant le backend
+        async function decodeBase58(data) {
+            const response = await fetch(`${backendUrl}/decode-base58`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data })
+            });
+            const result = await response.json();
+            if (result.decoded) {
+                return new Uint8Array(result.decoded);
+            } else {
+                throw new Error(result.error || 'Erreur lors du décodage Base58.');
+            }
+        }
+
+        // Fonction pour récupérer le keyPair du backend
+        async function getKeyPair() {
+            const response = await fetch(`${backendUrl}/keypair`);
+            const data = await response.json();
+            if (data.publicKey && data.secretKey) {
+                return {
+                    publicKey: new Uint8Array(data.publicKey),
+                    secretKey: new Uint8Array(data.secretKey)
+                };
+            } else {
+                throw new Error(data.error || 'Erreur lors de la récupération du keyPair.');
+            }
+        }
+
+        // Fonction pour déchiffrer la payload
+        async function decryptPayload(data, nonce, sharedSecret) {
+            console.log("Déchiffrement de la payload avec sharedSecret :", sharedSecret);
+            const decodedData = await decodeBase58(data);
+            const decodedNonce = await decodeBase58(nonce);
+            console.log("Données décodées :", decodedData);
+            console.log("Nonce décodé :", decodedNonce);
+
+            try {
+                const decryptedData = sodium.crypto_secretbox_open_easy(
+                    decodedData,
+                    decodedNonce,
+                    sharedSecret
+                );
+
+                console.log("Données déchiffrées :", decryptedData);
+                return JSON.parse(new TextDecoder().decode(decryptedData));
+            } catch (error) {
+                throw new Error('Erreur de déchiffrement.');
+            }
+        }
+
         // Fonction principale pour récupérer la clé publique depuis l'URL
         async function getPublicKeyFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -100,20 +164,21 @@
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const response = await fetch('http://localhost:5000/decrypt', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ data, nonce, phantom_encryption_public_key: phantomEncryptionPublicKey })
-                    });
+                    const keyPair = await getKeyPair();
+                    const decodedPhantomPublicKey = await decodeBase58(phantomEncryptionPublicKey);
 
-                    const result = await response.json();
-                    if (result.decryptedData && result.decryptedData.public_key) {
-                        const publicKey = result.decryptedData.public_key;
-                        console.log('Clé publique du wallet récupérée :', publicKey);
-                        return publicKey;
-                    } else {
-                        throw new Error(result.error || 'Erreur lors du déchiffrement.');
-                    }
+                    // Calcul du sharedSecret
+                    const sharedSecret = sodium.crypto_scalarmult(
+                        keyPair.secretKey,
+                        decodedPhantomPublicKey
+                    );
+
+                    console.log("Shared Secret généré :", sharedSecret);
+
+                    const decryptedData = await decryptPayload(data, nonce, sharedSecret);
+                    const publicKeyResult = decryptedData.public_key;
+                    console.log('Clé publique du wallet récupérée :', publicKeyResult);
+                    return publicKeyResult;
                 } catch (error) {
                     console.error('Erreur lors du déchiffrement ou de la récupération de la clé publique :', error.message || error);
                 }
