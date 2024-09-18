@@ -6,13 +6,13 @@
     "node": "20.x"
   },
   "scripts": {
-    "start": "expo start --clear",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "build": "expo export:web",
-    "eject": "expo eject"
-  },
+  "start": "expo start --clear",
+  "android": "expo start --android",
+  "ios": "expo start --ios",
+  "web": "expo start --web",
+  "build": "npx expo export:web",
+  "eject": "expo eject"
+},
   "dependencies": {
     "@solana/web3.js": "~1.35.0",
     "buffer": "^6.0.3",
