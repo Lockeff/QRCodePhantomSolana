@@ -5,9 +5,8 @@
     <title>Connect to Phantom Wallet via QR Code</title>
     <!-- Importation des librairies nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@stablelib/base58@1.0.1/lib/base58.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bs58/4.0.1/bs58.min.js"></script>
 </head>
 <body>
     <h1>Connect to Phantom Wallet via QR Code</h1>
@@ -19,13 +18,12 @@
 
     <script>
         // Importation des modules nécessaires
-        const { decode: bs58Decode, encode: bs58Encode } = window.base58;
         const nacl = window.nacl;
-        const { Buffer } = window.buffer;
+        const bs58 = window.bs58;
 
         // Générer la paire de clés publique/privée pour le chiffrement
         const keyPair = nacl.box.keyPair();
-        const dappEncryptionPublicKey = bs58Encode(Buffer.from(keyPair.publicKey));
+        const dappEncryptionPublicKey = bs58.encode(keyPair.publicKey);
         console.log("Generated dappEncryptionPublicKey:", dappEncryptionPublicKey);
 
         function generateQRCode() {
@@ -49,8 +47,8 @@
 
         function decryptPayload(data, nonce, sharedSecret) {
             console.log("Decrypting payload with sharedSecret:", sharedSecret);
-            const decodedData = bs58Decode(data);
-            const decodedNonce = bs58Decode(nonce);
+            const decodedData = bs58.decode(data);
+            const decodedNonce = bs58.decode(nonce);
             console.log("Decoded Data:", decodedData);
             console.log("Decoded Nonce:", decodedNonce);
 
@@ -74,7 +72,7 @@
 
             if (data && nonce && phantomEncryptionPublicKey) {
                 try {
-                    const sharedSecret = nacl.box.before(bs58Decode(phantomEncryptionPublicKey), keyPair.secretKey);
+                    const sharedSecret = nacl.box.before(bs58.decode(phantomEncryptionPublicKey), keyPair.secretKey);
                     console.log("Shared Secret generated:", sharedSecret);
 
                     const decryptedData = decryptPayload(data, nonce, sharedSecret);
