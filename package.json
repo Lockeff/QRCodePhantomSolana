@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "scripts": {
       "dev": "expo start --web",
-      "build": "expo build:web",
+      "build": "npx expo export:web",
       "start": "react-scripts start"
     },
     "dependencies": {
