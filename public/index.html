@@ -115,15 +115,20 @@
         // Générer le QR Code
         async function generateQRCode() {
             try {
-                const keyPair = await getKeyPair();
+                const keyPair = getKeyPair();
                 const publicKeyHex = uint8ArrayToHex(keyPair.publicKey);
+                console.log("Clé publique (hex) :", publicKeyHex);
+
                 const dappEncryptionPublicKey = await encodeBase58(publicKeyHex);
-                console.log("Clé publique de chiffrement de l'application :", dappEncryptionPublicKey);
+                console.log("Clé publique de chiffrement de l'application (Base58) :", dappEncryptionPublicKey);
 
                 const appUrl = window.location.origin;
                 const redirectLink = window.location.href;
 
-                const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(appUrl)}&dapp_encryption_public_key=${dappEncryptionPublicKey}&cluster=mainnet-beta&redirect_link=${encodeURIComponent(redirectLink)}`;
+                console.log('appUrl:', appUrl);
+                console.log('redirectLink:', redirectLink);
+
+                const phantomDeepLink = `https://phantom.app/ul/v1/connect?dapp_encryption_public_key=${encodeURIComponent(dappEncryptionPublicKey)}&redirect_link=${encodeURIComponent(redirectLink)}&app_url=${encodeURIComponent(appUrl)}&cluster=mainnet-beta`;
 
                 console.log('Lien Phantom Deep Link généré :', phantomDeepLink);
 
@@ -140,6 +145,7 @@
                 console.error('Erreur lors de la génération du QR Code :', error);
             }
         }
+
 
         // Déchiffrer la payload
         async function decryptPayload(data, nonce, sharedSecret) {
