@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "engines": {
-    "node": ">=15.0.0 <17.0.0"
+    "node": "20.x"
   },
   "scripts": {
     "start": "expo start --clear",
