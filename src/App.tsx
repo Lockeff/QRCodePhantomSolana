@@ -1,86 +1,63 @@
+// src/App.tsx
+
 import React, { useState, useEffect } from 'react';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'uuid'; // Utilisez uuid
-import './App.css'; // Assurez-vous que ce fichier existe
+import { v4 as uuidv4 } from 'uuid';
+import './App.css';
+import crypto from 'crypto';
 
 function App() {
-  const [keyPair, setKeyPair] = useState<nacl.BoxKeyPair | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [publicKey, setPublicKey] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
-
-  // Générer ou récupérer la paire de clés
-  useEffect(() => {
-    const storedPublicKey = localStorage.getItem('keyPairPublicKey');
-    const storedSecretKey = localStorage.getItem('keyPairSecretKey');
-
-    if (storedPublicKey && storedSecretKey) {
-      const publicKey = new Uint8Array(JSON.parse(storedPublicKey));
-      const secretKey = new Uint8Array(JSON.parse(storedSecretKey));
-      setKeyPair({ publicKey, secretKey });
-      logMessage('Paire de clés chargée depuis localStorage');
-    } else {
-      const newKeyPair = nacl.box.keyPair();
-      setKeyPair(newKeyPair);
-      localStorage.setItem('keyPairPublicKey', JSON.stringify(Array.from(newKeyPair.publicKey)));
-      localStorage.setItem('keyPairSecretKey', JSON.stringify(Array.from(newKeyPair.secretKey)));
-      logMessage('Nouvelle paire de clés générée et stockée dans localStorage');
-    }
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   // Fonction pour ajouter un message aux logs
   const logMessage = (message: string) => {
     setLogs((prevLogs) => [...prevLogs, message]);
   };
 
+  // Fonction pour dériver un seed à partir du sessionId
+  const deriveSeed = (sessionId: string): Uint8Array => {
+    const hash = crypto.createHash('sha256').update(sessionId).digest();
+    return new Uint8Array(hash.slice(0, 32)); // TweetNaCl nécessite un seed de 32 octets
+  };
+
+  // Générer la paire de clés déterministe
+  const generateKeyPair = (sessionId: string): nacl.BoxKeyPair => {
+    const seed = deriveSeed(sessionId);
+    return nacl.box.keyPair.fromSeed(seed);
+  };
+
   // Générer le QR Code
   const generateQRCode = async () => {
-    if (!keyPair) {
-      logMessage('Paire de clés non disponible');
-      return;
-    }
-
     const sessionId = uuidv4();
     logMessage(`Session ID généré : ${sessionId}`);
 
-    // Envoyer la paire de clés au backend pour stockage
+    const keyPair = generateKeyPair(sessionId);
+    logMessage('Paire de clés générée de manière déterministe');
+
+    const appUrl = window.location.origin;
+    const redirectLink = `${appUrl}/?sessionId=${encodeURIComponent(sessionId)}`;
+
+    const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(
+      appUrl
+    )}&dapp_encryption_public_key=${encodeURIComponent(bs58.encode(keyPair.publicKey))}&redirect_link=${encodeURIComponent(
+      redirectLink
+    )}&cluster=mainnet-beta`;
+
+    logMessage(`Lien Phantom Deep Link généré : ${phantomDeepLink}`);
+
     try {
-      const response = await fetch('/api/storeKeyPair', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          publicKey: Array.from(keyPair.publicKey),
-          secretKey: Array.from(keyPair.secretKey),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors du stockage de la paire de clés');
-      }
-
-      logMessage('Paire de clés stockée sur le backend');
-
-      const appUrl = window.location.origin;
-      const redirectLink = `${window.location.origin}/?sessionId=${sessionId}`;
-
-      const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(
-        appUrl
-      )}&dapp_encryption_public_key=${encodeURIComponent(bs58.encode(keyPair.publicKey))}&redirect_link=${encodeURIComponent(
-        redirectLink
-      )}&cluster=mainnet-beta`;
-
-      logMessage(`Lien Phantom Deep Link généré : ${phantomDeepLink}`);
-
-      // Générer le QR code
       const qrCodeDataUrl = await QRCode.toDataURL(phantomDeepLink);
       setQrCodeUrl(qrCodeDataUrl);
       logMessage('QR Code généré');
     } catch (error: any) {
       console.error('Erreur lors de la génération du QR Code :', error);
       logMessage(`Erreur : ${error.message}`);
+      setError(error.message);
     }
   };
 
@@ -101,36 +78,24 @@ function App() {
   // Récupérer la clé publique depuis l'URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const data = urlParams.get('data');
-    const nonce = urlParams.get('nonce');
-    const phantomPublicKey = urlParams.get('phantom_encryption_public_key');
     const sessionId = urlParams.get('sessionId');
 
-    if (data && nonce && phantomPublicKey && sessionId) {
+    if (sessionId) {
       logMessage('Paramètres de redirection détectés');
 
-      // Récupérer la paire de clés depuis le backend
-      fetch(`/api/getKeyPair?sessionId=${encodeURIComponent(sessionId)}`)
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error('Paire de clés non trouvée pour cette session');
-          }
-          return res.json();
-        })
-        .then((keyData) => {
-          const { publicKey, secretKey } = keyData;
-          const retrievedKeyPair: nacl.BoxKeyPair = {
-            publicKey: new Uint8Array(publicKey),
-            secretKey: new Uint8Array(secretKey),
-          };
-          logMessage('Paire de clés récupérée depuis le backend');
+      try {
+        const keyPair = generateKeyPair(sessionId);
+        logMessage('Paire de clés dérivée à partir du sessionId');
 
-          // Calculer le secret partagé
-          const phantomPublicKeyBytes = bs58.decode(phantomPublicKey);
-          const sharedSecret = nacl.box.before(phantomPublicKeyBytes, retrievedKeyPair.secretKey);
+        // Simuler la récupération de données chiffrées (à ajuster selon votre logique)
+        // Ici, nous supposons que les paramètres 'data' et 'nonce' sont présents dans l'URL
+        const data = urlParams.get('data');
+        const nonce = urlParams.get('nonce');
+
+        if (data && nonce) {
+          const sharedSecret = nacl.box.before(bs58.decode(keyPair.publicKey), keyPair.secretKey);
           logMessage('Secret partagé calculé');
 
-          // Déchiffrer les données
           const decryptedData = decryptPayload(data, nonce, sharedSecret);
           logMessage('Données déchiffrées');
 
@@ -140,15 +105,18 @@ function App() {
 
           // Nettoyer les paramètres de l'URL
           window.history.replaceState({}, document.title, '/');
-        })
-        .catch((error) => {
-          console.error('Erreur lors de la récupération de la clé publique :', error);
-          logMessage(`Erreur : ${error.message}`);
-        });
+        } else {
+          logMessage('Paramètres "data" et "nonce" manquants dans l\'URL');
+        }
+      } catch (error: any) {
+        console.error('Erreur lors de la récupération de la clé publique :', error);
+        logMessage(`Erreur : ${error.message}`);
+        setError(error.message);
+      }
     } else {
       logMessage('Aucune donnée de redirection à traiter');
     }
-  }, [keyPair]);
+  }, []);
 
   return (
     <div className="App">
@@ -171,6 +139,12 @@ function App() {
           <pre key={index}>{log}</pre>
         ))}
       </div>
+      {error && (
+        <div className="error">
+          <h2>Erreur :</h2>
+          <p>{error}</p>
+        </div>
+      )}
     </div>
   );
 }
